@@ -41,7 +41,12 @@ class MapsBrowser:
 
             page = context.new_page()
 
-            page.goto("https://www.google.com/maps", timeout=10000)
+            try:
+                page.goto("https://www.google.com/maps", timeout=10000)
+
+            except Exception as e:  # pylint: disable=broad-except
+                _logger().error('Failed to open Google Maps: %s', e)
+                return locations
 
             self._open_restaurants_panel(page, google_maps_query)
             self._scroll_restaurants_to_end(page)

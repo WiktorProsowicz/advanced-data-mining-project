@@ -33,6 +33,12 @@ class EDAFeatureExtractor:
         stats['min_restaurant_rating'] = min(restaurant_ratings)
         stats['max_restaurant_rating'] = max(restaurant_ratings)
 
+        review_lengths = [len(review.text) for reviews in ds.values() for review in reviews]
+
+        stats['avg_review_length'] = sum(review_lengths) / len(review_lengths)
+        stats['min_review_length'] = min(review_lengths)
+        stats['max_review_length'] = max(review_lengths)
+
         return stats
 
     def _load_ds(self) -> Dict[Restaurant, List[Review]]:
