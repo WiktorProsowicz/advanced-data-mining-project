@@ -17,5 +17,5 @@ pyproject.toml  # Core project configuration (version, dependencies, dev deps).
 ```
 just setup_env
 just install_deps
-uv run python scripts/scrape_google_reviews.py
+uv run python scripts/scrape_google_reviews.py +proxy.server=SERVER +proxy.username=USER +proxy.password=PASSWORD
 ```
