@@ -1,0 +1,12 @@
+{
+    "configurations": [
+        {
+            "name": "Scrape Google Reviews",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/scrape_google_reviews.py",
+            "console": "integratedTerminal",
+            "args": []
+        }
+    ]
+}
