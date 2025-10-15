@@ -10,6 +10,9 @@ class Restaurant:
     name: str
     basic_info: str
 
+    def __hash__(self):
+        return hash(self.href)
+
 
 @dataclasses.dataclass
 class Review:
