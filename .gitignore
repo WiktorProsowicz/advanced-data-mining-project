@@ -1,0 +1,6 @@
+.venv/
+outputs/
+advanced_data_mining.egg-info/
+tmp/
+log/
+__pycache__/
