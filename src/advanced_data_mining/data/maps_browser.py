@@ -71,6 +71,7 @@ class MapsBrowser:
             )
 
             page = context.new_page()
+            page.set_default_timeout(2000)
 
             try:
                 page.goto(location.href, timeout=10000)
