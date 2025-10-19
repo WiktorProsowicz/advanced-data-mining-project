@@ -4,7 +4,7 @@ import re
 
 from playwright.sync_api import sync_playwright
 
-from advanced_data_mining.data.structs import Restaurant, Review
+from advanced_data_mining.data.raw_ds import Restaurant, Review
 
 
 def _logger():

@@ -46,12 +46,12 @@ def main(script_cfg: omegaconf.DictConfig):
 
         locations = scraper.get_locations_by_query(query)
 
-        _logger().info('Found %d locations for query: %s',
-                       len(locations), query)
-
         if not locations:
             _logger().warning('No locations found for query: %s', query)
             continue
+
+        _logger().info('Found %d locations for query: %s',
+                       len(locations), query)
 
         for loc in locations:
 
