@@ -4,6 +4,7 @@ set positional-arguments
 setup_env:
     @echo "Setting up virtual environment..."
     uv venv -p /opt/conda/bin/python --system-site-packages
+    echo 'export MPLBACKEND=Agg' >> .venv/bin/activate
 
 # Install project package, Python libs, browser engine etc.
 build_project:

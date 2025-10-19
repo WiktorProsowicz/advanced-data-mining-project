@@ -1,68 +1,84 @@
 """Contains utilities for exploratory data analysis (EDA)."""
 
-import json
+from typing import Dict, Any
 import os
-from typing import List, Dict, Any
 
-from advanced_data_mining.data.structs import Review, Restaurant
+import matplotlib.pyplot as plt
+import pandas as pd  # type: ignore
 
 
 class EDAFeatureExtractor:
     """Extracts features from the dataset for EDA purposes."""
 
-    def __init__(self, raw_ds_path: str):
+    def __init__(self, processed_ds_path: str):
 
-        self._raw_ds_path = raw_ds_path
+        self._processed_ds_path = processed_ds_path
 
     def extract_basic_stats(self) -> Dict[str, Any]:
         """Extracts basic statistics from the dataset."""
 
         stats: Dict[str, Any] = {}
 
-        ds = self._load_ds()
+        ds = pd.read_pickle(os.path.join(self._processed_ds_path, 'preprocessed_dataset.pkl'))
+        numerical_stats = pd.read_pickle(os.path.join(self._processed_ds_path,
+                                                      'numerical_features.pkl'))
 
-        stats['total_restaurants'] = len(ds)
-        stats['total_reviews'] = sum(len(reviews) for reviews in ds.values())
-        stats['avg_reviews_per_restaurant'] = stats['total_reviews'] / stats['total_restaurants']
+        stats['total_restaurants'] = int(ds['restaurant_href'].nunique())
+        stats['total_reviews'] = int(len(ds))
+        stats['avg_review'] = float(stats['total_reviews'] / stats['total_restaurants'])
 
-        restaurant_ratings = [
-            sum(review.rating for review in reviews) / len(reviews) for reviews in ds.values()
-        ]
+        restaurant_ratings = ds.groupby('restaurant_href')['review_rating'].mean()
 
-        stats['avg_restaurant_rating'] = sum(restaurant_ratings) / len(restaurant_ratings)
-        stats['min_restaurant_rating'] = min(restaurant_ratings)
-        stats['max_restaurant_rating'] = max(restaurant_ratings)
+        stats['avg_restaurant_rating'] = float(restaurant_ratings.mean())
+        stats['min_restaurant_rating'] = float(restaurant_ratings.min())
+        stats['max_restaurant_rating'] = float(restaurant_ratings.max())
 
-        review_lengths = [len(review.text) for reviews in ds.values() for review in reviews]
+        stats['avg_words_in_review'] = float(numerical_stats['num_words'].mean())
+        stats['min_words_in_review'] = float(numerical_stats['num_words'].min())
+        stats['max_words_in_review'] = float(numerical_stats['num_words'].max())
 
-        stats['avg_review_length'] = sum(review_lengths) / len(review_lengths)
-        stats['min_review_length'] = min(review_lengths)
-        stats['max_review_length'] = max(review_lengths)
+        stats['avg_sentences_in_review'] = float(numerical_stats['num_sentences'].mean())
+        stats['min_sentences_in_review'] = float(numerical_stats['num_sentences'].min())
+        stats['max_sentences_in_review'] = float(numerical_stats['num_sentences'].max())
+
+        stats['n_reviews_from_cracow'] = int(len(ds[ds['is_from_cracow']]))
 
         return stats
 
-    def _load_ds(self) -> Dict[Restaurant, List[Review]]:
+    def get_figures(self) -> Dict[str, plt.Figure]:
+        """Generates figures for EDA."""
 
-        ds: Dict[Restaurant, List[Review]] = {}
+        figures: Dict[str, plt.Figure] = {}
 
-        for json_file in os.listdir(self._raw_ds_path):
+        ds = pd.read_pickle(os.path.join(self._processed_ds_path, 'preprocessed_dataset.pkl'))
+        numerical_stats = pd.read_pickle(os.path.join(self._processed_ds_path,
+                                                      'numerical_features.pkl'))
 
-            with open(os.path.join(self._raw_ds_path, json_file), "r", encoding="utf-8") as f:
-                data = json.load(f)
+        fig, ax = plt.subplots()
 
-            location = Restaurant(
-                href=data["location"]["href"],
-                name=data["location"]["name"],
-                basic_info=data["location"]["basic_info"]
-            )
+        ax.hist(ds['review_rating'], bins=5, range=(1, 6), align='left', rwidth=0.8)
+        ax.set_title('Distribution of Review Ratings')
+        ax.set_xlabel('Review Rating')
+        ax.set_ylabel('Number of Reviews')
 
-            reviews = [
-                Review(
-                    text=review["text"],
-                    rating=review["rating"]
-                ) for review in data["reviews"]
-            ]
+        figures['review_rating_distribution'] = fig
 
-            ds[location] = reviews
+        fig, ax = plt.subplots()
 
-        return ds
+        ax.hist(numerical_stats['num_words'], bins=100, color='orange')
+        ax.set_title('Distribution of Number of Words in Reviews')
+        ax.set_xlabel('Number of Words')
+        ax.set_ylabel('Number of Reviews')
+
+        figures['num_words_distribution'] = fig
+
+        fig, ax = plt.subplots()
+
+        ax.hist(numerical_stats['num_sentences'], bins=50, color='green')
+        ax.set_title('Distribution of Number of Sentences in Reviews')
+        ax.set_xlabel('Number of Sentences')
+        ax.set_ylabel('Number of Reviews')
+
+        figures['num_sentences_distribution'] = fig
+
+        return figures

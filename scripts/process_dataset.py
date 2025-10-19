@@ -12,6 +12,7 @@ The script performs the following steps:
 import logging
 import os
 import hashlib
+import json
 
 import hydra
 import pandas as pd  # type: ignore
@@ -19,6 +20,7 @@ import omegaconf
 import tqdm  # type: ignore
 import torch
 
+from advanced_data_mining.data import eda
 from advanced_data_mining.data import text_processing
 from advanced_data_mining.utils import logging_utils
 from advanced_data_mining.data import raw_ds
@@ -197,6 +199,22 @@ def main(cfg: omegaconf.DictConfig):
         text_processor=text_processor,
         output_dir=os.path.join(cfg.output_path, "pos_bow")
     )
+
+    _logger().info('Saving dataset stats...')
+
+    os.makedirs(os.path.join(cfg.output_path, "eda"), exist_ok=True)
+
+    eda_extractor = eda.EDAFeatureExtractor(processed_ds_path=cfg.output_path)
+
+    stats = eda_extractor.extract_basic_stats()
+
+    overall_stats_path = os.path.join(cfg.output_path, "eda", "dataset_stats.json")
+    with open(overall_stats_path, 'w', encoding='utf-8') as f:
+        json.dump(stats, f)
+
+    for fig_name, fig in eda_extractor.get_figures().items():
+        fig_path = os.path.join(cfg.output_path, "eda", f"{fig_name}.png")
+        fig.savefig(fig_path)
 
 
 if __name__ == "__main__":
