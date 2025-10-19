@@ -29,9 +29,7 @@
 	"workspaceMount": "source=${localWorkspaceFolder},target=/home/devcontainer/workspace,type=bind",
 	"workspaceFolder": "/home/devcontainer/workspace",
 	// Features to add to the dev container. More info: https://containers.dev/features.
-	"features": {
-		"ghcr.io/devcontainers/features/git:1": {}
-	},
+	"features": {},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.

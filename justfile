@@ -3,8 +3,7 @@ set positional-arguments
 # Sets up a Python virtual environment.
 setup_env:
     @echo "Setting up virtual environment..."
-    uv python install 3.12
-    uv venv
+    uv venv -p /opt/conda/bin/python --system-site-packages
 
 # Install project package, Python libs, browser engine etc.
 build_project:
