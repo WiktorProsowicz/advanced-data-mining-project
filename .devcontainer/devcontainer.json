@@ -33,7 +33,10 @@
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "/bin/bash .devcontainer/res/post_create_command.bash"
+	"postCreateCommand": "/bin/bash .devcontainer/res/post_create_command.bash",
 	// Configure tool-specific properties.
 	// "customizations": {},
+	"runArgs": [
+		"--gpus", "all"
+	]
 }
