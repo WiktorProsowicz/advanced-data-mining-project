@@ -1,3 +1,4 @@
 raw_ds_path: tmp/reviews
 output_path: tmp/processed_ds
 vocabulary_top_bottom_words: 100
+bert_model_device: cpu

@@ -13,6 +13,7 @@ import logging
 import os
 import hashlib
 import json
+from typing import Dict, List
 
 import hydra
 import pandas as pd  # type: ignore
@@ -72,7 +73,8 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
 
 def _prepare_bow_representations(vocabulary_path: str,
                                  dataset: pd.DataFrame,
-                                 output_path: str):
+                                 output_path: str,
+                                 use_tfidf: bool):
     """Prepares and saves BOW representations for the dataset."""
 
     text_processor = text_processing.TextPreprocessor()
@@ -83,7 +85,10 @@ def _prepare_bow_representations(vocabulary_path: str,
     os.makedirs(output_path, exist_ok=True)
 
     for idx, row in dataset.iterrows():
-        bow_repr = text_processor.get_bow_representation(row['review_text'])
+        if use_tfidf:
+            bow_repr = text_processor.get_tfidf_representation(row['review_text'])
+        else:
+            bow_repr = text_processor.get_bow_representation(row['review_text'])
 
         hashed_dir = hashlib.sha256(bytes(row['restaurant_href'],
                                           encoding='utf-8')).hexdigest()
@@ -100,11 +105,51 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
 
     _logger().info('Preparing numerical features...')
 
+    chunk_lengths = (5, 7, 9, 11, 13)
+
+    velocity_series: Dict[int, List[float]] = {cl: [] for cl in chunk_lengths}
+    volume_series: Dict[int, List[float]] = {cl: [] for cl in chunk_lengths}
+
+    for idx, row in tqdm.tqdm(dataset.iterrows(),
+                              desc='Generating numerical features',
+                              total=len(dataset)):
+
+        hashed_dir = hashlib.sha256(bytes(row['restaurant_href'],
+                                          encoding='utf-8')).hexdigest()
+        os.makedirs(os.path.join(output_dir, 'bert_embeddings', str(hashed_dir)), exist_ok=True)
+
+        embeddings_path = os.path.join(output_dir, 'bert_embeddings', str(hashed_dir), f"{idx}.pt")
+        if os.path.exists(embeddings_path):
+            sentence_embeddings = torch.load(embeddings_path)
+        else:
+            sentence_embeddings = text_processor.get_bert_embeddings(row['review_text'])
+            torch.save(sentence_embeddings, embeddings_path)
+
+        for chunk_length in chunk_lengths:
+            trace_velocity = text_processor.calc_trace_velocity(
+                sentence_embeddings,
+                chunk_length=chunk_length
+            )
+            trace_volume = text_processor.calc_trace_volume(
+                sentence_embeddings,
+                chunk_length=chunk_length
+            )
+
+            velocity_series[chunk_length].append(trace_velocity)
+            volume_series[chunk_length].append(trace_volume)
+
     features = pd.concat((
+        dataset['restaurant_href'],
         dataset['review_text'].map(text_processor.num_words),
         dataset['review_text'].map(text_processor.num_sentences),
-        dataset['restaurant_href']
-    ), axis=1, keys=['num_words', 'num_sentences', 'restaurant_href'])
+        *(pd.Series(velocity_series[cl]) for cl in chunk_lengths),
+        *(pd.Series(volume_series[cl]) for cl in chunk_lengths),
+    ),
+        axis=1,
+        keys=['restaurant_href', 'num_words', 'num_sentences',
+              *(f'trace_velocity_cl_{cl}' for cl in chunk_lengths),
+              *(f'trace_volume_cl_{cl}' for cl in chunk_lengths)]
+    )
 
     features.to_pickle(os.path.join(output_dir, 'numerical_features.pkl'))
 
@@ -142,7 +187,7 @@ def main(cfg: omegaconf.DictConfig):
 
     _logger().info('Preparing preprocessed dataset...')
 
-    text_processor = text_processing.TextPreprocessor()
+    text_processor = text_processing.TextPreprocessor(bert_model_device=cfg.bert_model_device)
 
     prep_ds = _obtain_preprocessed_ds(
         raw_dataset=raw_ds.RawDSLoader(cfg.raw_ds_path).load_dataset(),
@@ -173,13 +218,29 @@ def main(cfg: omegaconf.DictConfig):
     _prepare_bow_representations(
         vocabulary_path=os.path.join(cfg.output_path, "vocabulary_top.txt"),
         dataset=prep_ds,
-        output_path=os.path.join(cfg.output_path, "bow_representations_top")
+        output_path=os.path.join(cfg.output_path, "bow_representations_top"),
+        use_tfidf=False
     )
 
     _prepare_bow_representations(
         vocabulary_path=os.path.join(cfg.output_path, "vocabulary_bottom.txt"),
         dataset=prep_ds,
-        output_path=os.path.join(cfg.output_path, "bow_representations_bottom")
+        output_path=os.path.join(cfg.output_path, "bow_representations_bottom"),
+        use_tfidf=False
+    )
+
+    _prepare_bow_representations(
+        vocabulary_path=os.path.join(cfg.output_path, "vocabulary_top.txt"),
+        dataset=prep_ds,
+        output_path=os.path.join(cfg.output_path, "tfidf_representations_top"),
+        use_tfidf=True
+    )
+
+    _prepare_bow_representations(
+        vocabulary_path=os.path.join(cfg.output_path, "vocabulary_bottom.txt"),
+        dataset=prep_ds,
+        output_path=os.path.join(cfg.output_path, "tfidf_representations_bottom"),
+        use_tfidf=True
     )
 
     _prepare_numerical_features(

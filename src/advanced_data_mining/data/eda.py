@@ -43,6 +43,16 @@ class EDAFeatureExtractor:
 
         stats['n_reviews_from_cracow'] = int(len(ds[ds['is_from_cracow']]))
 
+        for col in [c for c in numerical_stats.columns if c.startswith('trace_velocity_')]:
+            stats[f'avg_{col}'] = float(numerical_stats[col].mean())
+            stats[f'min_{col}'] = float(numerical_stats[col].min())
+            stats[f'max_{col}'] = float(numerical_stats[col].max())
+
+        for col in [c for c in numerical_stats.columns if c.startswith('trace_volume_')]:
+            stats[f'avg_{col}'] = float(numerical_stats[col].mean())
+            stats[f'min_{col}'] = float(numerical_stats[col].min())
+            stats[f'max_{col}'] = float(numerical_stats[col].max())
+
         return stats
 
     def get_figures(self) -> Dict[str, plt.Figure]:
