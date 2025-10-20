@@ -267,20 +267,6 @@ def main(cfg: omegaconf.DictConfig):
 
     _logger().info('Saving dataset stats...')
 
-    os.makedirs(os.path.join(cfg.output_path, "eda"), exist_ok=True)
-
-    eda_extractor = eda.EDAFeatureExtractor(processed_ds_path=cfg.output_path)
-
-    stats = eda_extractor.extract_basic_stats()
-
-    overall_stats_path = os.path.join(cfg.output_path, "eda", "dataset_stats.json")
-    with open(overall_stats_path, 'w', encoding='utf-8') as f:
-        json.dump(stats, f)
-
-    for fig_name, fig in eda_extractor.get_figures().items():
-        fig_path = os.path.join(cfg.output_path, "eda", f"{fig_name}.png")
-        fig.savefig(fig_path)
-
 
 if __name__ == "__main__":
     main()  # pylint: disable=no-value-for-parameter
