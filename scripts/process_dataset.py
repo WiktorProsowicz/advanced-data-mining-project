@@ -53,6 +53,10 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
 
             preprocessed_text = text_processor.normalize_text(review.text)
 
+            if not preprocessed_text:
+                _logger().debug('Skipping empty review for restaurant %s', restaurant.href)
+                continue
+
             preprocessed_reviews.append(
                 (restaurant.href,
                  restaurant.name,
