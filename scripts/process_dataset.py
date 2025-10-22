@@ -13,7 +13,7 @@ import logging
 import os
 import hashlib
 import json
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import hydra
 import pandas as pd  # type: ignore
@@ -104,15 +104,16 @@ def _prepare_bow_representations(vocabulary_path: str,
 
 def _prepare_numerical_features(dataset: pd.DataFrame,
                                 text_processor: text_processing.TextPreprocessor,
+                                chunking_cfg: List[Dict[str, int]],
                                 output_dir: str):
     """Prepares and saves numerical features for the dataset."""
 
     _logger().info('Preparing numerical features...')
 
-    chunk_lengths = (5, 7, 9, 11, 13)
+    chunks_data = [(cfg['chunk_length'], cfg['step_size']) for cfg in chunking_cfg]
 
-    velocity_series: Dict[int, List[float]] = {cl: [] for cl in chunk_lengths}
-    volume_series: Dict[int, List[float]] = {cl: [] for cl in chunk_lengths}
+    velocity_series: Dict[Tuple[int, int], List[float]] = {(cl, sz): [] for cl, sz in chunks_data}
+    volume_series: Dict[Tuple[int, int], List[float]] = {(cl, sz): [] for cl, sz in chunks_data}
 
     for idx, row in tqdm.tqdm(dataset.iterrows(),
                               desc='Generating numerical features',
@@ -129,30 +130,35 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
             sentence_embeddings = text_processor.get_bert_embeddings(row['review_text'])
             torch.save(sentence_embeddings, embeddings_path)
 
-        for chunk_length in chunk_lengths:
+        for ch_len, step_size in chunks_data:
             trace_velocity = text_processor.calc_trace_velocity(
                 sentence_embeddings,
-                chunk_length=chunk_length
+                chunk_length=ch_len,
+                step_size=step_size
             )
             trace_volume = text_processor.calc_trace_volume(
                 sentence_embeddings,
-                chunk_length=chunk_length
+                chunk_length=ch_len,
+                step_size=step_size
             )
 
-            velocity_series[chunk_length].append(trace_velocity)
-            volume_series[chunk_length].append(trace_volume)
+            velocity_series[(ch_len, step_size)].append(trace_velocity)
+            volume_series[(ch_len, step_size)].append(trace_volume)
 
     features = pd.concat((
         dataset['restaurant_href'],
         dataset['review_text'].map(text_processor.num_words),
         dataset['review_text'].map(text_processor.num_sentences),
-        *(pd.Series(velocity_series[cl]) for cl in chunk_lengths),
-        *(pd.Series(volume_series[cl]) for cl in chunk_lengths),
+        dataset['review_rating'],
+        dataset['is_from_cracow'],
+        *(pd.Series(velocity_series[(cl, sz)]) for cl, sz in chunks_data),
+        *(pd.Series(volume_series[(cl, sz)]) for cl, sz in chunks_data),
     ),
         axis=1,
         keys=['restaurant_href', 'num_words', 'num_sentences',
-              *(f'trace_velocity_cl_{cl}' for cl in chunk_lengths),
-              *(f'trace_volume_cl_{cl}' for cl in chunk_lengths)]
+              'review_rating', 'is_from_cracow',
+              *(f'trace_velocity_cl_{cl}_sz_{sz}' for cl, sz in chunks_data),
+              *(f'trace_volume_cl_{cl}_sz_{sz}' for cl, sz in chunks_data)]
     )
 
     features.to_pickle(os.path.join(output_dir, 'numerical_features.pkl'))
@@ -189,6 +195,9 @@ def main(cfg: omegaconf.DictConfig):
 
     os.makedirs(cfg.output_path, exist_ok=True)
 
+    with open(os.path.join(cfg.output_path, 'metadata.json'), 'w', encoding='utf-8') as meta_f:
+        json.dump(omegaconf.OmegaConf.to_container(cfg), meta_f, indent=4)
+
     _logger().info('Preparing preprocessed dataset...')
 
     text_processor = text_processing.TextPreprocessor(bert_model_device=cfg.bert_model_device)
@@ -209,7 +218,10 @@ def main(cfg: omegaconf.DictConfig):
         filepath=os.path.join(cfg.output_path, "vocabulary.txt")
     )
 
-    top_vocab, bottom_vocab = text_processor.top_bottom_n_words(cfg.vocabulary_top_bottom_words)
+    top_vocab, bottom_vocab = text_processor.top_bottom_n_words(
+        n_top=cfg.top_words_for_bow_repr,
+        n_bottom=cfg.bottom_words_for_bow_repr
+    )
 
     for label, words in (("top", top_vocab), ("bottom", bottom_vocab)):
 
@@ -250,6 +262,7 @@ def main(cfg: omegaconf.DictConfig):
     _prepare_numerical_features(
         dataset=prep_ds,
         text_processor=text_processor,
+        chunking_cfg=omegaconf.OmegaConf.to_container(cfg.volume_velocity_cfg),
         output_dir=cfg.output_path
     )
 

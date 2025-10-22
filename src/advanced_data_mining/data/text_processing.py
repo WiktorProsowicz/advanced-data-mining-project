@@ -105,14 +105,13 @@ class TextPreprocessor:
 
     def calc_trace_velocity(self,
                             sentence_embeddings: List[torch.Tensor],
-                            chunk_length: int) -> float:
+                            chunk_length: int,
+                            step_size: int) -> float:
         """Calculates trace velocity for the given sentence embeddings."""
 
         cat_embeddings = torch.cat(sentence_embeddings, dim=0)
 
-        chunks = [cat_embeddings[i:i + chunk_length]
-                  for i in range(0, len(cat_embeddings), chunk_length)
-                  if i + chunk_length <= len(cat_embeddings)]
+        chunks = self._prepare_chunks(cat_embeddings, chunk_length, step_size)
 
         if len(chunks) < 2:
             return 0.0
@@ -126,14 +125,13 @@ class TextPreprocessor:
 
     def calc_trace_volume(self,
                           sentence_embeddings: List[torch.Tensor],
-                          chunk_length: int) -> float:
+                          chunk_length: int,
+                          step_size: int) -> float:
         """Calculates trace volume for the given sentence embeddings."""
 
         cat_embeddings = torch.cat(sentence_embeddings, dim=0)
 
-        chunks = [cat_embeddings[i:i + chunk_length]
-                  for i in range(0, len(cat_embeddings), chunk_length)
-                  if i + chunk_length <= len(cat_embeddings)]
+        chunks = self._prepare_chunks(cat_embeddings, chunk_length, step_size)
 
         if len(chunks) < 2:
             return 0.0
@@ -142,6 +140,14 @@ class TextPreprocessor:
         max_values = torch.max(cat_embeddings, dim=0).values
 
         return torch.norm(max_values - min_values).item()
+
+    def _prepare_chunks(self,
+                        tensor: torch.Tensor,
+                        chunk_length: int,
+                        step_size: int) -> List[torch.Tensor]:
+
+        return [tensor[i:i + chunk_length]
+                for i in range(0, tensor.size(0) - chunk_length + 1, step_size)]
 
     def _get_bert_model_and_tokenizer(self) -> Tuple[BertTokenizer, BertModel]:
         """Initializes and returns BERT tokenizer and model."""
@@ -216,12 +222,12 @@ class TextPreprocessor:
                 pos = line.strip()
                 self._pos_vocab.add(pos)
 
-    def top_bottom_n_words(self, n: int) -> Tuple[Vocabulary, Vocabulary]:
+    def top_bottom_n_words(self, n_top: int, n_bottom: int) -> Tuple[Vocabulary, Vocabulary]:
         """Returns the top/bottom N words in the vocabulary based on their frequency."""
 
         return (
-            self._take_n_words_from_vocab(n, from_top=True),
-            self._take_n_words_from_vocab(n, from_top=False)
+            self._take_n_words_from_vocab(n_top, from_top=True),
+            self._take_n_words_from_vocab(n_bottom, from_top=False)
         )
 
     def get_bow_representation(self, text: str) -> torch.Tensor:

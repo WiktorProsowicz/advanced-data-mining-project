@@ -31,6 +31,8 @@ def main(script_cfg: omegaconf.DictConfig):
     with open(os.path.join(script_cfg.output_dir, "stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=4)
 
+    _logger().info("Generating figures for EDA...")
+
     for fig_name, fig in feature_extractor.get_figures().items():
         fig_path = os.path.join(script_cfg.output_dir, f"{fig_name}.png")
         fig.savefig(fig_path)
