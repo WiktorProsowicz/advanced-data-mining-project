@@ -7,6 +7,19 @@
             "program": "${workspaceFolder}/scripts/scrape_google_reviews.py",
             "console": "integratedTerminal",
             "args": []
+        },
+        {
+            "name": "Process Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/process_dataset.py",
+            "console": "integratedTerminal",
+            "args": [
+                "bert_model_device=cuda",
+                "top_words_for_bow_repr=2000",
+                "bottom_words_for_bow_repr=2000",
+                "volume_velocity_cfg=[{chunk_length:3,step_size:1}]"
+            ]
         }
     ]
 }
