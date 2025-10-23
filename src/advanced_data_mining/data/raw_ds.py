@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 """Contains definitions of raw dataset structures and utilities for loading/saving them."""
-
-import os
-from typing import Dict, List, TypeAlias
 import dataclasses
 import json
+import os
+from typing import Dict
+from typing import List
+from typing import TypeAlias
 
 
 @dataclasses.dataclass
@@ -12,7 +14,7 @@ class Restaurant:
     href: str
     name: str
     basic_info: str
-    city: str = ""
+    city: str = ''
 
     def __hash__(self):
         return hash(self.href)
@@ -43,26 +45,26 @@ class RawDSLoader:
         for json_file in os.listdir(self._raw_ds_path):
 
             if any(city in json_file for city in ['krakow', 'kraków']):
-                city = "Krakow"
+                city = 'Krakow'
 
             else:
-                city = "Warsaw"
+                city = 'Warsaw'
 
-            with open(os.path.join(self._raw_ds_path, json_file), "r", encoding="utf-8") as f:
+            with open(os.path.join(self._raw_ds_path, json_file), 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
             location = Restaurant(
-                href=data["location"]["href"],
-                name=data["location"]["name"],
-                basic_info=data["location"]["basic_info"],
+                href=data['location']['href'],
+                name=data['location']['name'],
+                basic_info=data['location']['basic_info'],
                 city=city
             )
 
             reviews = [
                 Review(
-                    text=review["text"],
-                    rating=review["rating"]
-                ) for review in data["reviews"]
+                    text=review['text'],
+                    rating=review['rating']
+                ) for review in data['reviews']
             ]
 
             ds[location] = reviews

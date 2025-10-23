@@ -1,10 +1,15 @@
-from typing import Dict, List, Iterator
+# -*- coding: utf-8 -*-
+"""Contains primary Google Maps reviews scraping engine."""
 import logging
 import re
+from typing import Dict
+from typing import Iterator
+from typing import List
 
 from playwright.sync_api import sync_playwright
 
-from advanced_data_mining.data.raw_ds import Restaurant, Review
+from advanced_data_mining.data.raw_ds import Restaurant
+from advanced_data_mining.data.raw_ds import Review
 
 
 def _logger():
@@ -35,14 +40,14 @@ class MapsBrowser:
 
             context = browser.new_context(
                 # viewport={"width": 1280, "height": 1280},
-                locale="en-US",
-                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+                locale='en-US',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
             )
 
             page = context.new_page()
 
             try:
-                page.goto("https://www.google.com/maps", timeout=10000)
+                page.goto('https://www.google.com/maps', timeout=10000)
 
             except Exception as e:  # pylint: disable=broad-except
                 _logger().error('Failed to open Google Maps: %s', e)
@@ -71,8 +76,8 @@ class MapsBrowser:
 
             context = browser.new_context(
                 # viewport={"width": 1280, "height": 1280},
-                locale="en-US",
-                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+                locale='en-US',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
             )
 
             page = context.new_page()
@@ -172,9 +177,7 @@ class MapsBrowser:
                                 new_review_divs_count)
                 break
 
-            else:
-                num_retries = self._reviews_scroll_retries
-
+            num_retries = self._reviews_scroll_retries
             review_divs_count = new_review_divs_count
 
     def _scroll_restaurants_to_end(self, page):

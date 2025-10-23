@@ -1,12 +1,15 @@
+# -*- coding: utf-8 -*-
 """Contains utilities for exploratory data analysis (EDA)."""
-
-from typing import Dict, Any, List, Set, Tuple
 import os
 import re
+from typing import Any
+from typing import Dict
+from typing import Set
+from typing import Tuple
 
-import numpy as np  # type: ignore
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
+import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 
 

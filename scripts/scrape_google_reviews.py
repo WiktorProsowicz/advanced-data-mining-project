@@ -1,14 +1,16 @@
+# -*- coding: utf-8 -*-
 """Script to scrape Google Maps reviews for locations matching specified queries."""
-
-import logging
-import tqdm  # type: ignore
 import dataclasses
-from typing import List, Dict, Any
-import os
 import json
+import logging
+import os
+from typing import Any
+from typing import Dict
+from typing import List
 
 import hydra
 import omegaconf
+import tqdm  # type: ignore
 
 from advanced_data_mining.data import maps_browser
 from advanced_data_mining.utils import logging_utils
@@ -18,20 +20,20 @@ def _logger():
     return logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="cfg", config_name="scrape_google_reviews")
+@hydra.main(version_base=None, config_path='cfg', config_name='scrape_google_reviews')
 def main(script_cfg: omegaconf.DictConfig):
     """Scrapes Google Maps reviews for locations matching specified queries."""
 
     logging_utils.setup_logging(script_signature='scrape_google_reviews')
 
     if script_cfg.proxy is None:
-        _logger().critical("Proxy configuration is required.")
+        _logger().critical('Proxy configuration is required.')
         return
 
     proxy_cfg = {
-        "server": script_cfg.proxy.server,
-        "username": script_cfg.proxy.username,
-        "password": script_cfg.proxy.password,
+        'server': script_cfg.proxy.server,
+        'username': script_cfg.proxy.username,
+        'password': script_cfg.proxy.password,
     }
 
     scraper = maps_browser.MapsBrowser(

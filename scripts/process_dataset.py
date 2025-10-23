@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Transforms raw dataset into a processed format suitable for model training.
 
 The script performs the following steps:
@@ -8,23 +9,23 @@ The script performs the following steps:
 4. Generation of basic numerical features for each review.
 5. Generation of features derived from advanced text representations (e.g., BERT embeddings).
 """
-
-import logging
-import os
 import hashlib
 import json
-from typing import Dict, List, Tuple
+import logging
+import os
+from typing import Dict
+from typing import List
+from typing import Tuple
 
 import hydra
-import pandas as pd  # type: ignore
 import omegaconf
-import tqdm  # type: ignore
+import pandas as pd  # type: ignore
 import torch
+import tqdm  # type: ignore
 
-from advanced_data_mining.data import eda
+from advanced_data_mining.data import raw_ds
 from advanced_data_mining.data import text_processing
 from advanced_data_mining.utils import logging_utils
-from advanced_data_mining.data import raw_ds
 
 
 def _logger():
@@ -35,7 +36,7 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
                             text_processor: text_processing.TextPreprocessor,
                             output_path: str) -> pd.DataFrame:
 
-    preprocessed_ds_path = os.path.join(output_path, "preprocessed_dataset.pkl")
+    preprocessed_ds_path = os.path.join(output_path, 'preprocessed_dataset.pkl')
 
     if os.path.exists(preprocessed_ds_path):
         return pd.read_pickle(preprocessed_ds_path)
@@ -43,11 +44,11 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
     preprocessed_reviews = []
 
     for restaurant, reviews in tqdm.tqdm(raw_dataset.items(),
-                                         desc="Processing restaurants",
+                                         desc='Processing restaurants',
                                          total=len(raw_dataset)):
 
         for review in tqdm.tqdm(reviews,
-                                desc="Processing reviews",
+                                desc='Processing reviews',
                                 total=len(reviews),
                                 leave=False):
 
@@ -61,14 +62,14 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
                 (restaurant.href,
                  restaurant.name,
                  restaurant.basic_info,
-                 restaurant.city == "Krakow",
+                 restaurant.city == 'Krakow',
                  preprocessed_text,
                  review.rating)
             )
 
     prep_ds = pd.DataFrame(preprocessed_reviews,
-                           columns=["restaurant_href", "restaurant_name", "restaurant_basic_info",
-                                    "is_from_cracow", "review_text", "review_rating"])
+                           columns=['restaurant_href', 'restaurant_name', 'restaurant_basic_info',
+                                    'is_from_cracow', 'review_text', 'review_rating'])
 
     prep_ds.to_pickle(preprocessed_ds_path)
 
@@ -123,7 +124,7 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
                                           encoding='utf-8')).hexdigest()
         os.makedirs(os.path.join(output_dir, 'bert_embeddings', str(hashed_dir)), exist_ok=True)
 
-        embeddings_path = os.path.join(output_dir, 'bert_embeddings', str(hashed_dir), f"{idx}.pt")
+        embeddings_path = os.path.join(output_dir, 'bert_embeddings', str(hashed_dir), f'{idx}.pt')
         if os.path.exists(embeddings_path):
             sentence_embeddings = torch.load(embeddings_path)
         else:
@@ -185,7 +186,7 @@ def _prepare_pos_based_features(dataset: pd.DataFrame,
                    os.path.join(output_dir, str(hashed_dir), f'{idx}.pt'))
 
 
-@hydra.main(version_base=None, config_path="cfg", config_name="process_dataset")
+@hydra.main(version_base=None, config_path='cfg', config_name='process_dataset')
 def main(cfg: omegaconf.DictConfig):
     """Loads and processes the dataset according to the provided configuration."""
 
@@ -215,7 +216,7 @@ def main(cfg: omegaconf.DictConfig):
 
     text_processor.save_vocabulary_to_file(
         vocabulary=text_processor.vocabulary,
-        filepath=os.path.join(cfg.output_path, "vocabulary.txt")
+        filepath=os.path.join(cfg.output_path, 'vocabulary.txt')
     )
 
     top_vocab, bottom_vocab = text_processor.top_bottom_n_words(
@@ -223,39 +224,39 @@ def main(cfg: omegaconf.DictConfig):
         n_bottom=cfg.bottom_words_for_bow_repr
     )
 
-    for label, words in (("top", top_vocab), ("bottom", bottom_vocab)):
+    for label, words in (('top', top_vocab), ('bottom', bottom_vocab)):
 
-        vocab_path = os.path.join(cfg.output_path, f"vocabulary_{label}.txt")
+        vocab_path = os.path.join(cfg.output_path, f'vocabulary_{label}.txt')
         text_processing.TextPreprocessor.save_vocabulary_to_file(
             vocabulary=words,
             filepath=vocab_path
         )
 
     _prepare_bow_representations(
-        vocabulary_path=os.path.join(cfg.output_path, "vocabulary_top.txt"),
+        vocabulary_path=os.path.join(cfg.output_path, 'vocabulary_top.txt'),
         dataset=prep_ds,
-        output_path=os.path.join(cfg.output_path, "bow_representations_top"),
+        output_path=os.path.join(cfg.output_path, 'bow_representations_top'),
         use_tfidf=False
     )
 
     _prepare_bow_representations(
-        vocabulary_path=os.path.join(cfg.output_path, "vocabulary_bottom.txt"),
+        vocabulary_path=os.path.join(cfg.output_path, 'vocabulary_bottom.txt'),
         dataset=prep_ds,
-        output_path=os.path.join(cfg.output_path, "bow_representations_bottom"),
+        output_path=os.path.join(cfg.output_path, 'bow_representations_bottom'),
         use_tfidf=False
     )
 
     _prepare_bow_representations(
-        vocabulary_path=os.path.join(cfg.output_path, "vocabulary_top.txt"),
+        vocabulary_path=os.path.join(cfg.output_path, 'vocabulary_top.txt'),
         dataset=prep_ds,
-        output_path=os.path.join(cfg.output_path, "tfidf_representations_top"),
+        output_path=os.path.join(cfg.output_path, 'tfidf_representations_top'),
         use_tfidf=True
     )
 
     _prepare_bow_representations(
-        vocabulary_path=os.path.join(cfg.output_path, "vocabulary_bottom.txt"),
+        vocabulary_path=os.path.join(cfg.output_path, 'vocabulary_bottom.txt'),
         dataset=prep_ds,
-        output_path=os.path.join(cfg.output_path, "tfidf_representations_bottom"),
+        output_path=os.path.join(cfg.output_path, 'tfidf_representations_bottom'),
         use_tfidf=True
     )
 
@@ -269,17 +270,17 @@ def main(cfg: omegaconf.DictConfig):
     text_processor.update_pos_vocab(prep_ds['review_text'].tolist())
 
     text_processor.save_pos_vocab_to_file(
-        filepath=os.path.join(cfg.output_path, "pos_vocabulary.txt")
+        filepath=os.path.join(cfg.output_path, 'pos_vocabulary.txt')
     )
 
     _prepare_pos_based_features(
         dataset=prep_ds,
         text_processor=text_processor,
-        output_dir=os.path.join(cfg.output_path, "pos_bow")
+        output_dir=os.path.join(cfg.output_path, 'pos_bow')
     )
 
     _logger().info('Saving dataset stats...')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()  # pylint: disable=no-value-for-parameter

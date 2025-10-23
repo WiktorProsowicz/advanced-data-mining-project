@@ -13,7 +13,12 @@ build_project:
     source .venv/bin/activate
     uv pip install -e .
     uv run playwright install --with-deps firefox
-    
+
 install_dev_deps:
     @echo "Installing development dependencies..."
     uv pip install -r pyproject.toml --extra dev
+
+
+run_static_checks:
+    @echo "Running static checks..."
+    uv run pre-commit run --all-files
