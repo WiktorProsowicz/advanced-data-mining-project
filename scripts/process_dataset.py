@@ -151,14 +151,14 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
         dataset['review_text'].map(text_processor.num_sentences),
         dataset['review_rating'],
         dataset['is_from_cracow'],
-        *(pd.Series(velocity_series[(cl, sz)]) for cl, sz in chunks_data),
-        *(pd.Series(volume_series[(cl, sz)]) for cl, sz in chunks_data),
+        *(pd.Series(velocity_series[(cl, sz)],
+                    name=f'trace_velocity_cl_{cl}_sz_{sz}')
+          for cl, sz in chunks_data),
+        *(pd.Series(volume_series[(cl, sz)],
+                    name=f'trace_volume_cl_{cl}_sz_{sz}')
+          for cl, sz in chunks_data),
     ),
-        axis=1,
-        keys=['restaurant_href', 'num_words', 'num_sentences',
-              'review_rating', 'is_from_cracow',
-              *(f'trace_velocity_cl_{cl}_sz_{sz}' for cl, sz in chunks_data),
-              *(f'trace_volume_cl_{cl}_sz_{sz}' for cl, sz in chunks_data)]
+        axis=1
     )
 
     features.to_pickle(os.path.join(output_dir, 'numerical_features.pkl'))
