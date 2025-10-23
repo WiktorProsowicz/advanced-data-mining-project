@@ -147,8 +147,8 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
 
     features = pd.concat((
         dataset['restaurant_href'],
-        dataset['review_text'].map(text_processor.num_words),
-        dataset['review_text'].map(text_processor.num_sentences),
+        dataset['review_text'].map(text_processor.num_words).rename('num_words'),
+        dataset['review_text'].map(text_processor.num_sentences).rename('num_sentences'),
         dataset['review_rating'],
         dataset['is_from_cracow'],
         *(pd.Series(velocity_series[(cl, sz)],
