@@ -4,7 +4,9 @@ from typing import Dict, Any, List, Set, Tuple
 import os
 import re
 
+import numpy as np  # type: ignore
 import matplotlib.pyplot as plt
+import matplotlib.ticker as plticker
 import pandas as pd  # type: ignore
 
 
@@ -76,9 +78,46 @@ class EDAFeatureExtractor:
 
         figures.update(self._get_distribution_figures())
 
-        figures.update(self._get_clustering_figures())
+        figures.update(self._get_velocity_volume_figures())
+
+        figures.update(self._get_length_clustering_figures())
 
         return figures
+
+    def _get_length_clustering_figures(self) -> Dict[str, plt.Figure]:
+        """Generates figures showing clustering with respect to review length."""
+
+        fig, axes = plt.subplots(2, figsize=(8, 12))
+
+        chosen_reviews = self._numerical_stats.sample(n=min(1000, len(self._numerical_stats)))
+
+        for rating in range(1, 6):
+            axes[0].scatter(
+                chosen_reviews['num_words'][chosen_reviews['review_rating'] == rating],
+                chosen_reviews['num_sentences'][chosen_reviews['review_rating'] == rating],
+                alpha=0.5,
+                label=f'Rating {rating}'
+            )
+
+        axes[0].set_title('Clustering of Number of Words vs Number of Sentences')
+        axes[0].set_xlabel('Number of Words')
+        axes[0].set_ylabel('Number of Sentences')
+        axes[0].legend()
+
+        axes[1].scatter(chosen_reviews['num_words'][chosen_reviews['is_from_cracow']],
+                        chosen_reviews['num_sentences'][chosen_reviews['is_from_cracow']],
+                        alpha=0.5, label='From Cracow')
+        axes[1].scatter(chosen_reviews['num_words'][~chosen_reviews['is_from_cracow']],
+                        chosen_reviews['num_sentences'][~chosen_reviews['is_from_cracow']],
+                        alpha=0.5, label='From Warsaw')
+        axes[1].set_title('Clustering of Number of Words vs Number of Sentences')
+        axes[1].set_xlabel('Number of Words')
+        axes[1].set_ylabel('Number of Sentences')
+        axes[1].legend()
+
+        return {
+            'clustering_words_vs_sentences': fig
+        }
 
     def _get_distribution_figures(self) -> Dict[str, plt.Figure]:
         """Generates distribution figures for EDA."""
@@ -87,54 +126,89 @@ class EDAFeatureExtractor:
 
         fig, ax = plt.subplots()
 
-        ax.hist(self._ds['review_rating'], bins=5, range=(1, 6), align='left', rwidth=0.8)
+        ax.hist(self._ds['review_rating'], bins=5, range=(1, 6),
+                align='left', rwidth=0.8,
+                weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
         ax.set_title('Distribution of Review Ratings')
         ax.set_xlabel('Review Rating')
-        ax.set_ylabel('Number of Reviews')
+        ax.set_ylabel('Percentage of Reviews')
+        ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
 
         figures['review_rating_distribution'] = fig
 
-        fig, ax = plt.subplots()
+        threshold = self._numerical_stats['num_words'].quantile(0.95)
+        chosen_reviews = self._numerical_stats[self._numerical_stats['num_words'] < threshold]
 
-        ax.hist(self._numerical_stats['num_words'], bins=100, color='orange')
-        ax.set_title('Distribution of Number of Words in Reviews')
-        ax.set_xlabel('Number of Words')
-        ax.set_ylabel('Number of Reviews')
+        fig, axes = plt.subplots(5, figsize=(8, 15))
+
+        for i, rating in enumerate(range(1, 6)):
+            ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
+            axes[i].hist(ratings['num_words'], bins=100, color='orange')
+            axes[i].set_title(f'Distribution of Number of Words in Reviews (Rating {rating})')
+            axes[i].set_xlabel('Number of Words')
+            axes[i].set_ylabel('Number of Reviews')
 
         figures['num_words_distribution'] = fig
 
-        fig, ax = plt.subplots()
+        threshold = self._numerical_stats['num_sentences'].quantile(0.95)
+        chosen_reviews = self._numerical_stats[self._numerical_stats['num_sentences'] < threshold]
 
-        ax.hist(self._numerical_stats['num_sentences'], bins=50, color='green')
-        ax.set_title('Distribution of Number of Sentences in Reviews')
-        ax.set_xlabel('Number of Sentences')
-        ax.set_ylabel('Number of Reviews')
+        fig, axes = plt.subplots(5, figsize=(8, 15))
+
+        for i, rating in enumerate(range(1, 6)):
+            ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
+            axes[i].hist(ratings['num_sentences'], bins=100, color='green')
+            axes[i].set_title(f'Distribution of Number of Sentences in Reviews (Rating {rating})')
+            axes[i].set_xlabel('Number of Sentences')
+            axes[i].set_ylabel('Number of Reviews')
 
         figures['num_sentences_distribution'] = fig
 
         return figures
 
-    def _get_clustering_figures(self) -> Dict[str, plt.Figure]:
-        """Generates clustering figures for EDA."""
+    def _get_velocity_volume_figures(self) -> Dict[str, plt.Figure]:
+        """Generates velocity and volume clustering figures for EDA."""
 
         figures: Dict[str, plt.Figure] = {}
 
-        for chunk_length, chunk_size in self._get_vol_vel_chunk_infos():
+        chunk_infos = self._get_vol_vel_chunk_infos()
 
-            fig, ax = plt.subplots()
+        fig, axes = plt.subplots(len(chunk_infos), 2, figsize=(12, 6 * len(chunk_infos)))
+
+        for i, (chunk_length, chunk_size) in enumerate(chunk_infos):
 
             vel_col = f'trace_velocity_cl_{chunk_length}_sz_{chunk_size}'
             vol_col = f'trace_volume_cl_{chunk_length}_sz_{chunk_size}'
 
-            ax.scatter(self._numerical_stats[vel_col],
-                       self._numerical_stats[vol_col],
-                       alpha=0.5,
-                       c=self._numerical_stats['review_rating'])
-            ax.set_title(f'Clustering of Velocity vs Volume (Chunk Length: {chunk_length})')
-            ax.set_xlabel('Trace Velocity')
-            ax.set_ylabel('Trace Volume')
+            chosen_reviews = self._numerical_stats[self._numerical_stats[vel_col] > 0]
+            chosen_reviews = chosen_reviews[chosen_reviews[vol_col] > 0]
+            chosen_reviews = chosen_reviews.sample(n=min(1000, len(chosen_reviews)))
 
-            figures[f'clustering_vel_vs_vol_cl_{chunk_length}'] = fig
+            for rating in range(1, 6):
+                axes[i, 0].scatter(
+                    chosen_reviews[vel_col][chosen_reviews['review_rating'] == rating],
+                    chosen_reviews[vol_col][chosen_reviews['review_rating'] == rating],
+                    alpha=0.5,
+                    label=f'Rating {rating}'
+                )
+
+            axes[i, 0].set_title(f'Clustering of Velocity vs Volume (Chunk Length: {chunk_length})')
+            axes[i, 0].set_xlabel('Trace Velocity')
+            axes[i, 0].set_ylabel('Trace Volume')
+            axes[i, 0].legend()
+
+            axes[i, 1].scatter(chosen_reviews[vel_col][chosen_reviews['is_from_cracow']],
+                               chosen_reviews[vol_col][chosen_reviews['is_from_cracow']],
+                               alpha=0.5, label='From Cracow')
+            axes[i, 1].scatter(chosen_reviews[vel_col][~chosen_reviews['is_from_cracow']],
+                               chosen_reviews[vol_col][~chosen_reviews['is_from_cracow']],
+                               alpha=0.5, label='From Warsaw')
+            axes[i, 1].set_title(f'Velocity vs Volume (CL: {chunk_length}, SZ={chunk_size})')
+            axes[i, 1].set_xlabel('Trace Velocity')
+            axes[i, 1].set_ylabel('Trace Volume')
+            axes[i, 1].legend()
+
+        figures['clustering_velocity_volume'] = fig
 
         return figures
 
