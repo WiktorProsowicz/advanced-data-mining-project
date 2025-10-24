@@ -1,15 +1,20 @@
+# -*- coding: utf-8 -*-
 """Contains utilities for text processing, normalization and obtaining embeddings."""
-
-from typing import List, Set, DefaultDict, Tuple, Optional
 import collections
 import dataclasses
+from typing import DefaultDict
+from typing import List
+from typing import Optional
+from typing import Set
+from typing import Tuple
 
-import torch
-import nltk  # type: ignore
 import gruut
-import tqdm  # type: ignore
+import nltk  # type: ignore
 import numpy as np
-from transformers import BertTokenizer, BertModel  # type: ignore
+import torch
+import tqdm  # type: ignore
+from transformers import BertModel
+from transformers import BertTokenizer
 
 
 @dataclasses.dataclass
@@ -25,7 +30,7 @@ class Vocabulary:
 class TextPreprocessor:
     """Preprocesses text data for further analysis."""
 
-    def __init__(self, bert_model_device: str = "cpu"):
+    def __init__(self, bert_model_device: str = 'cpu'):
 
         self._vocabulary = Vocabulary(
             word_counts=collections.defaultdict(int),
@@ -39,11 +44,11 @@ class TextPreprocessor:
         self._bert_model_device = bert_model_device
 
         nltk.download('punkt_tab', quiet=True)
-        nltk.download("punkt", quiet=True)
-        nltk.download("stopwords", quiet=True)
+        nltk.download('punkt', quiet=True)
+        nltk.download('stopwords', quiet=True)
         nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 
-        self._stop_words = set(nltk.corpus.stopwords.words("english"))
+        self._stop_words = set(nltk.corpus.stopwords.words('english'))
 
         self._bert_tokenizer: Optional[BertTokenizer] = None
         self._bert_model: Optional[BertModel] = None
@@ -56,15 +61,15 @@ class TextPreprocessor:
     @staticmethod
     def save_vocabulary_to_file(vocabulary: Vocabulary, filepath: str):
         """Saves the vocabulary to a file."""
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
 
-            f.write(str(vocabulary.n_docs) + "\n")
+            f.write(str(vocabulary.n_docs) + '\n')
 
             for word, count in sorted(vocabulary.word_counts.items(),
                                       key=lambda item: item[1],
                                       reverse=True):
 
-                f.write(f"{word};{count};{vocabulary.word_in_doc_counts[word]}\n")
+                f.write(f'{word};{count};{vocabulary.word_in_doc_counts[word]}\n')
 
     def num_words(self, text: str) -> int:
         """Returns the number of words in the given text."""
@@ -83,7 +88,7 @@ class TextPreprocessor:
         """
 
         sentences = [sentence.text_with_ws for sentence in gruut.sentences(text, phonemes=False)]
-        return " ".join(sentences)
+        return ' '.join(sentences)
 
     def get_bert_embeddings(self, text: str) -> List[torch.Tensor]:
         """Generates word-level BERT embeddings for the given text's sentences."""
@@ -94,7 +99,7 @@ class TextPreprocessor:
 
         for sentence in nltk.tokenize.sent_tokenize(text):
 
-            inputs = tokenizer(sentence, return_tensors="pt", truncation=True, max_length=512)
+            inputs = tokenizer(sentence, return_tensors='pt', truncation=True, max_length=512)
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
             with torch.no_grad():
@@ -163,7 +168,7 @@ class TextPreprocessor:
     def update_vocabulary(self, texts: List[str]):
         """Updates the internal vocabulary with words from the provided texts."""
 
-        for text in tqdm.tqdm(texts, desc="Building vocabulary", total=len(texts)):
+        for text in tqdm.tqdm(texts, desc='Building vocabulary', total=len(texts)):
             words = self._prepare_for_bow(text)
 
             for word in words:
@@ -200,7 +205,7 @@ class TextPreprocessor:
     def update_pos_vocab(self, texts: List[str]):
         """Updates the internal vocabulary with parts of speech from the provided texts."""
 
-        for text in tqdm.tqdm(texts, desc="Building POS vocabulary", total=len(texts)):
+        for text in tqdm.tqdm(texts, desc='Building POS vocabulary', total=len(texts)):
 
             words = self._prepare_for_bow(text)
             pos_tags = nltk.pos_tag(words)
@@ -210,14 +215,14 @@ class TextPreprocessor:
 
     def save_pos_vocab_to_file(self, filepath: str):
         """Saves the POS vocabulary to a file."""
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             for pos in sorted(self._pos_vocab):
-                f.write(f"{pos}\n")
+                f.write(f'{pos}\n')
 
     def load_pos_vocab_from_file(self, filepath: str):
         """Loads POS vocabulary from a file."""
         self._pos_vocab.clear()
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             for line in f:
                 pos = line.strip()
                 self._pos_vocab.add(pos)
@@ -274,13 +279,13 @@ class TextPreprocessor:
         self._vocabulary.sorted_words.clear()
         self._vocabulary.n_docs = 0
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
             self._vocabulary.n_docs = int(lines[0].strip())
 
             for line in lines[1:]:
-                word, count, doc_count = line.strip().split(";")
+                word, count, doc_count = line.strip().split(';')
                 self._vocabulary.word_counts[word] = int(count)
                 self._vocabulary.word_in_doc_counts[word] = int(doc_count)
 
