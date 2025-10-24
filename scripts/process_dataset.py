@@ -9,7 +9,6 @@ The script performs the following steps:
 4. Generation of basic numerical features for each review.
 5. Generation of features derived from advanced text representations (e.g., BERT embeddings).
 """
-import hashlib
 import json
 import logging
 import os
@@ -26,6 +25,7 @@ import tqdm  # type: ignore
 from advanced_data_mining.data import raw_ds
 from advanced_data_mining.data import text_processing
 from advanced_data_mining.utils import logging_utils
+from advanced_data_mining.utils import misc
 
 
 def _logger():
@@ -95,8 +95,7 @@ def _prepare_bow_representations(vocabulary_path: str,
         else:
             bow_repr = text_processor.get_bow_representation(row['review_text'])
 
-        hashed_dir = hashlib.sha256(bytes(row['restaurant_href'],
-                                          encoding='utf-8')).hexdigest()
+        hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
         os.makedirs(os.path.join(output_path, str(hashed_dir)), exist_ok=True)
 
         torch.save(bow_repr,
@@ -120,8 +119,7 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
                               desc='Generating numerical features',
                               total=len(dataset)):
 
-        hashed_dir = hashlib.sha256(bytes(row['restaurant_href'],
-                                          encoding='utf-8')).hexdigest()
+        hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
         os.makedirs(os.path.join(output_dir, 'bert_embeddings', str(hashed_dir)), exist_ok=True)
 
         embeddings_path = os.path.join(output_dir, 'bert_embeddings', str(hashed_dir), f'{idx}.pt')
@@ -178,8 +176,7 @@ def _prepare_pos_based_features(dataset: pd.DataFrame,
 
         pos_bow_repr = text_processor.get_pos_bow_representation(row['review_text'])
 
-        hashed_dir = hashlib.sha256(bytes(row['restaurant_href'],
-                                          encoding='utf-8')).hexdigest()
+        hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
         os.makedirs(os.path.join(output_dir, str(hashed_dir)), exist_ok=True)
 
         torch.save(pos_bow_repr,
@@ -263,7 +260,7 @@ def main(cfg: omegaconf.DictConfig):
     _prepare_numerical_features(
         dataset=prep_ds,
         text_processor=text_processor,
-        chunking_cfg=omegaconf.OmegaConf.to_container(cfg.volume_velocity_cfg),
+        chunking_cfg=omegaconf.OmegaConf.to_container(cfg.volume_velocity_cfg),  # type: ignore
         output_dir=cfg.output_path
     )
 
