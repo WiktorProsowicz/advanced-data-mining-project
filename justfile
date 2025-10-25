@@ -3,7 +3,7 @@ set positional-arguments
 # Sets up a Python virtual environment.
 setup_env:
     @echo "Setting up virtual environment..."
-    uv venv -p /opt/conda/bin/python --system-site-packages
+    python3.11 -m venv .venv --system-site-packages
     echo 'export MPLBACKEND=Agg' >> .venv/bin/activate
 
 # Install project package, Python libs, browser engine etc.
@@ -11,14 +11,25 @@ build_project:
     #!/usr/bin/env bash
     echo "Installing project..."
     source .venv/bin/activate
-    uv pip install -e .
-    uv run playwright install --with-deps firefox
+    pip install -e .
+    playwright install --with-deps firefox
 
+# Install development dependencies.
 install_dev_deps:
-    @echo "Installing development dependencies..."
-    uv pip install -r pyproject.toml --extra dev
+    #!/usr/bin/env bash
+    echo "Installing development dependencies..."
+    source .venv/bin/activate
+    pip install -e .[dev]
 
-
+# Run static code checks using pre-commit.
 run_static_checks:
-    @echo "Running static checks..."
-    uv run pre-commit run --all-files
+    #!/usr/bin/env bash
+    echo "Running static checks..."
+    source .venv/bin/activate
+    pre-commit run --all-files
+
+# Run an arbitrary python script inside the virtual environment.
+run_python *args:
+    #!/usr/bin/env bash
+    source .venv/bin/activate
+    python "$@"

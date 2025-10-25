@@ -13,5 +13,3 @@ RUN apt update \
 RUN wget -qO- https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
 USER devcontainer
-
-RUN wget -qO- https://astral.sh/uv/install.sh | sh
