@@ -102,6 +102,37 @@ def _prepare_bow_representations(vocabulary_path: str,
                    os.path.join(output_path, str(hashed_dir), f'{idx}.pt'))
 
 
+def _prepare_bert_embeddings(dataset: pd.DataFrame,
+                             text_processor: text_processing.TextPreprocessor,
+                             output_dir: str):
+    """Prepares and saves BERT embeddings for the dataset."""
+
+    _logger().info('Preparing BERT embeddings...')
+
+    for idx, row in tqdm.tqdm(dataset.iterrows(),
+                              desc='Generating BERT embeddings',
+                              total=len(dataset)):
+
+        hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
+
+        word_embs_path = os.path.join(output_dir,
+                                      'word_bert_embeddings',
+                                      str(hashed_dir),
+                                      f'{idx}.pt')
+        sentence_embs_path = os.path.join(output_dir,
+                                          'sentence_bert_embeddings',
+                                          str(hashed_dir),
+                                          f'{idx}.pt')
+
+        os.makedirs(os.path.dirname(word_embs_path), exist_ok=True)
+        os.makedirs(os.path.dirname(sentence_embs_path), exist_ok=True)
+
+        word_embs, sentence_embs = text_processor.get_bert_embeddings(row['review_text'])
+
+        torch.save(word_embs, word_embs_path)
+        torch.save(sentence_embs, sentence_embs_path)
+
+
 def _prepare_numerical_features(dataset: pd.DataFrame,
                                 text_processor: text_processing.TextPreprocessor,
                                 chunking_cfg: List[Dict[str, int]],
@@ -122,21 +153,19 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
         hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
         os.makedirs(os.path.join(output_dir, 'bert_embeddings', str(hashed_dir)), exist_ok=True)
 
-        embeddings_path = os.path.join(output_dir, 'bert_embeddings', str(hashed_dir), f'{idx}.pt')
-        if os.path.exists(embeddings_path):
-            sentence_embeddings = torch.load(embeddings_path)
-        else:
-            sentence_embeddings = text_processor.get_bert_embeddings(row['review_text'])
-            torch.save(sentence_embeddings, embeddings_path)
+        embeddings = torch.load(os.path.join(output_dir,
+                                             'word_bert_embeddings',
+                                             str(hashed_dir),
+                                             f'{idx}.pt'))
 
         for ch_len, step_size in chunks_data:
             trace_velocity = text_processor.calc_trace_velocity(
-                sentence_embeddings,
+                embeddings,
                 chunk_length=ch_len,
                 step_size=step_size
             )
             trace_volume = text_processor.calc_trace_volume(
-                sentence_embeddings,
+                embeddings,
                 chunk_length=ch_len,
                 step_size=step_size
             )
@@ -255,6 +284,12 @@ def main(cfg: omegaconf.DictConfig):
         dataset=prep_ds,
         output_path=os.path.join(cfg.output_path, 'tfidf_representations_bottom'),
         use_tfidf=True
+    )
+
+    _prepare_bert_embeddings(
+        dataset=prep_ds,
+        text_processor=text_processor,
+        output_dir=cfg.output_path
     )
 
     _prepare_numerical_features(
