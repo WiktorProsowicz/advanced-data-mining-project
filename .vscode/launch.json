@@ -20,6 +20,16 @@
                 "bottom_words_for_bow_repr=2000",
                 "volume_velocity_cfg=[{chunk_length:3,step_size:1}]"
             ]
-        }
+        },
+        {
+            "name": "Train model.",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train_model.py",
+            "console": "integratedTerminal",
+            "args": [
+                "dataset_path=tmp/processed_ds_1_0_0",
+            ]
+        },
     ]
 }

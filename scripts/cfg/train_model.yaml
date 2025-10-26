@@ -1,0 +1,44 @@
+data_cfg:
+  ds_path: tmp/processed_ds_1_0_0
+  batch_size: 32
+  num_workers: 12
+  train_val_split: 0.8
+  n_test_samples: 1000
+
+model_cfg:
+  bow_encoders:
+    supported_features:
+      - bow_bottom
+      - bow_top
+      - tfidf_bottom
+      - tfidf_top
+      - pos_bow
+    params:
+      input_dim: 2000
+      hidden_dims: [64, 32]
+      dropout_rate: 0.1
+
+  numerical_feature_encoders:
+    supported_features:
+      - is_from_cracow
+      - num_words
+      - num_sentences
+    params:
+      hidden_dims: [8, 8]
+      dropout_rate: 0.1
+
+  trace_feature_encoders:
+    supported_features:
+      - cl_3_sz_1
+      - cl_7_sz_3
+      - cl_5_sz_3
+      - cl_3_sz_2
+      - cl_5_sz_2
+    params:
+      hidden_dims: [8, 8]
+      dropout_rate: 0.1
+
+  post_net:
+    input_dim: 224
+    hidden_dims: [128, 64]
+    dropout_rate: 0.1
