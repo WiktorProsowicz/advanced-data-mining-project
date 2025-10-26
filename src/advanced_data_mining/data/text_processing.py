@@ -85,10 +85,11 @@ class TextPreprocessor:
         sentences = [sentence.text_with_ws for sentence in gruut.sentences(text, phonemes=False)]
         return " ".join(sentences)
 
-    def get_bert_embeddings(self, text: str) -> List[torch.Tensor]:
-        """Generates word-level BERT embeddings for the given text's sentences."""
+    def get_bert_embeddings(self, text: str) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        """Generates word-level and sentence-level embeddings for the given text's sentences."""
 
-        embeddings: List[torch.Tensor] = []
+        word_embeddings: List[torch.Tensor] = []
+        sentence_embeddings: List[torch.Tensor] = []
 
         tokenizer, model = self._get_bert_model_and_tokenizer()
 
@@ -99,9 +100,10 @@ class TextPreprocessor:
 
             with torch.no_grad():
                 outputs = model(**inputs)
-                embeddings.append(outputs.last_hidden_state.squeeze(0)[1:-1])
+                word_embeddings.append(outputs.last_hidden_state.squeeze(0)[1:-1].clone())
+                sentence_embeddings.append(outputs.pooler_output.squeeze(0)[0].clone())
 
-        return embeddings
+        return word_embeddings, sentence_embeddings
 
     def calc_trace_velocity(self,
                             sentence_embeddings: List[torch.Tensor],
