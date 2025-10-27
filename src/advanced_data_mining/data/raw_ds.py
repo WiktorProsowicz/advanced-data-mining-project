@@ -26,7 +26,8 @@ class Review:
 
     text: str
     rating: float
-
+    translated: bool = False
+    original: str = ''
 
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]
 
@@ -60,12 +61,21 @@ class RawDSLoader:
                 city=city
             )
 
-            reviews = [
-                Review(
-                    text=review['text'],
-                    rating=review['rating']
-                ) for review in data['reviews']
-            ]
+            reviews: List[Review] = []
+
+            for review in data['reviews']:
+                translated_flag = bool(review.get('translated',
+                review.get('is_translated', False)))
+                original_text = review.get('original', review.get('original_text', ''))
+
+                reviews.append(
+                    Review(
+                        text=review['text'],
+                        rating=review['rating'],
+                        translated=translated_flag,
+                        original=original_text if translated_flag else ''
+                    )
+                )
 
             ds[location] = reviews
 

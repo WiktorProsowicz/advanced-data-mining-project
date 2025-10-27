@@ -5,7 +5,10 @@ import re
 from typing import Dict
 from typing import Iterator
 from typing import List
+from typing import Optional
+from typing import Tuple
 
+from playwright.sync_api import Page
 from playwright.sync_api import sync_playwright
 
 from advanced_data_mining.data.raw_ds import Restaurant
@@ -232,13 +235,82 @@ class MapsBrowser:
         stars_span = review_div.locator('span.kvMYJc').first
         rating = self._extract_rating(stars_span)
 
-        main_text_span = review_div.locator('span.wiI7pd').first
-        main_review = main_text_span.inner_text()
+        is_translated, translated_text, original_text = self._extract_texts(review_div)
 
         return Review(
-            text=main_review,
-            rating=rating
+            text=translated_text,
+            rating=rating,
+            translated=is_translated,
+            original=original_text
         )
+
+    def _extract_texts(self, review_div) -> Tuple[bool, str, str]:
+
+        """Extracts translated and original texts from the review div."""
+
+        text_spans = review_div.locator('span.wiI7pd')
+        span_texts = [span.strip() for span in text_spans.all_inner_texts() if span and span.strip()]
+
+        translated_marker = review_div.locator('span:has-text("Translated by Google")')
+        is_translated = translated_marker.count() > 0
+
+        candidate_buttons = review_div.locator('button')
+        button_texts = [text.strip() for text in candidate_buttons.all_inner_texts()
+                        if text and text.strip()]
+
+        marker_selectors = [
+            'span:has-text("See original")',
+            'button:has-text("See original")',
+            '[aria-label*="See original"]',
+            'span:has-text("Show original")',
+            'button:has-text("Show original")',
+            '[aria-label*="Show original"]',
+        ]
+
+        if not is_translated:
+            for selector in marker_selectors:
+                locator_matches = review_div.locator(selector)
+                if locator_matches.count() > 0:
+                    is_translated = True
+                    break
+
+        if not is_translated:
+            is_translated = any('original' in text.lower() for text in button_texts)
+
+        original_text = ''
+        translated_text = span_texts[0] if span_texts else ''
+
+        if is_translated and len(span_texts) > 1:
+            translated_text = span_texts[0]
+            original_text = span_texts[1]
+        elif is_translated:
+            """ Attempt to reveal original text by clicking the "See original" button """
+            show_original_btn = review_div.locator('button:has-text("See original")')
+            if show_original_btn.count() == 0:
+                show_original_btn = review_div.locator('button:has-text("Show original")')
+
+            if show_original_btn.count() > 0:
+                try:
+                    show_original_btn.first.click(timeout=1000)
+                    review_div.page.wait_for_timeout(300)
+                    refreshed_spans = [span.strip()
+                    for span in review_div.locator('span.wiI7pd').all_inner_texts() if span and span.strip()]
+                    if refreshed_spans:
+                        original_text = refreshed_spans[-1]
+                except Exception as exc: 
+                    _logger().debug('Failed to click "See original": %s', exc)
+
+        if is_translated and not original_text:
+            dataset = review_div.evaluate('el => el.dataset')
+            if isinstance(dataset, dict):
+                original_text = dataset.get('originalReviewText', original_text)
+
+        if not is_translated:
+            original_text = ''
+        elif not original_text:
+            original_text = translated_text
+
+        return is_translated, translated_text, original_text
 
     def _extract_rating(self, stars_span) -> float:
 
