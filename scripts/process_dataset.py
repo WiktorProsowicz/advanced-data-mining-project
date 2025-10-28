@@ -85,11 +85,13 @@ def _prepare_bow_representations(vocabulary_path: str,
     text_processor = text_processing.TextPreprocessor()
     text_processor.load_vocab_from_file(vocabulary_path)
 
-    _logger().info('Preparing BOW representations...')
+    _logger().info('Saving BOW representations to %s...', output_path)
 
     os.makedirs(output_path, exist_ok=True)
 
-    for idx, row in dataset.iterrows():
+    for idx, row in tqdm.tqdm(dataset.iterrows(),
+                              desc='Generating BOW representations',
+                              total=len(dataset)):
         if use_tfidf:
             bow_repr = text_processor.get_tfidf_representation(row['review_text'])
         else:
@@ -273,6 +275,13 @@ def main(cfg: omegaconf.DictConfig):
     )
 
     _prepare_bow_representations(
+        vocabulary_path=os.path.join(cfg.output_path, 'vocabulary.txt'),
+        dataset=prep_ds,
+        output_path=os.path.join(cfg.output_path, 'bow_representations_full'),
+        use_tfidf=False
+    )
+
+    _prepare_bow_representations(
         vocabulary_path=os.path.join(cfg.output_path, 'vocabulary_top.txt'),
         dataset=prep_ds,
         output_path=os.path.join(cfg.output_path, 'tfidf_representations_top'),
@@ -283,6 +292,13 @@ def main(cfg: omegaconf.DictConfig):
         vocabulary_path=os.path.join(cfg.output_path, 'vocabulary_bottom.txt'),
         dataset=prep_ds,
         output_path=os.path.join(cfg.output_path, 'tfidf_representations_bottom'),
+        use_tfidf=True
+    )
+
+    _prepare_bow_representations(
+        vocabulary_path=os.path.join(cfg.output_path, 'vocabulary.txt'),
+        dataset=prep_ds,
+        output_path=os.path.join(cfg.output_path, 'tfidf_representations_full'),
         use_tfidf=True
     )
 
