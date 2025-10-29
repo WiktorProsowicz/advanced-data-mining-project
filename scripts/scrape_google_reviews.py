@@ -7,7 +7,6 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
-from typing import Iterable
 
 import hydra
 import omegaconf
@@ -19,43 +18,6 @@ from advanced_data_mining.utils import logging_utils
 
 def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
-
-
-# --- Helpers -----------------------------------------------------------------
-ORIGINAL_KEYS = ('original', 'original_text', 'text_original')
-TRANSLATED_KEYS = ('translated_text', 'text', 'text_translated')
-TRANSLATED_BOOL_KEYS = ('translated', 'is_translated', 'was_translated')
-
-
-def _first_present(d: dict[str, Any], keys: Iterable[str]) -> Any:
-    """Return first non-None value for any of the given keys."""
-    for k in keys:
-        if k in d and d[k] is not None:
-            return d[k]
-    return None
-
-
-def normalize_review(review_dict: dict[str, Any]) -> dict[str, Any]:
-    """
-    If original and translated texts are identical (ignoring surrounding whitespace),
-    set translated flag to False and blank out the original field.
-    Works defensively with multiple common key names.
-    """
-    original_val = _first_present(review_dict, ORIGINAL_KEYS)
-    translated_val = _first_present(review_dict, TRANSLATED_KEYS)
-
-    if isinstance(original_val, str) and isinstance(translated_val, str):
-        if original_val.strip() == translated_val.strip():
-            # Flip any known boolean 'translated' flags to False
-            for bkey in TRANSLATED_BOOL_KEYS:
-                if bkey in review_dict:
-                    review_dict[bkey] = False
-            # Blank all known 'original' text fields that are present
-            for okey in ORIGINAL_KEYS:
-                if okey in review_dict:
-                    review_dict[okey] = ''
-
-    return review_dict
 
 
 def sanitize_for_fs(name: str) -> str:
@@ -112,43 +74,29 @@ def main(script_cfg: omegaconf.DictConfig):
                 )
                 continue
 
-            # Scrape -> dataclass -> dict -> normalize
-            raw_iter = scraper.scrape_reviews_for(loc)
+            reviews: list[dict[str, Any]] = []
 
-            normalized_reviews: list[dict[str, Any]] = []
-            changed_count = 0
+            for review in tqdm.tqdm(scraper.scrape_reviews_for(loc), unit='review', desc='Reviews'):
+                reviews.append(dataclasses.asdict(review))
 
-            for review in tqdm.tqdm(raw_iter, unit='review', desc='Reviews'):
-                rd = dataclasses.asdict(review)
-                before = (rd.get('original_text'), rd.get('translated_text'), rd.get('translated'))
-                rd = normalize_review(rd)
-                after = (rd.get('original_text'), rd.get('translated_text'), rd.get('translated'))
-                if before != after:
-                    changed_count += 1
-                normalized_reviews.append(rd)
-
-            if not normalized_reviews:
+            if not reviews:
                 _logger().error('No reviews found for location: %s', loc.name)
                 continue
 
             payload = {
                 'location': dataclasses.asdict(loc),
-                'reviews': normalized_reviews,
+                'reviews': reviews,
                 'query': query,
             }
 
-            output_path.write_text(
-                json.dumps(
-                    payload,
-                    ensure_ascii=False,
-                    indent=4),
-                encoding='utf-8')
             _logger().info(
-                'Saved %d reviews to %s (normalized %d).',
-                len(normalized_reviews),
+                'Saving %d reviews to %s...',
+                len(reviews),
                 output_path,
-                changed_count,
             )
+
+            with output_path.open('w', encoding='utf-8') as f:
+                json.dump(payload, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == '__main__':
