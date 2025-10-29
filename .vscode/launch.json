@@ -20,6 +20,16 @@
                 "bottom_words_for_bow_repr=2000",
                 "volume_velocity_cfg=[{chunk_length:3,step_size:1}]"
             ]
+        },
+        {
+            "name": "Perform EDA",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/perform_eda.py",
+            "console": "integratedTerminal",
+            "args": [
+                "processed_ds_dir=tmp/processed_ds_v0.1",
+            ]
         }
     ]
 }
