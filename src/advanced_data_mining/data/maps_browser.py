@@ -16,7 +16,10 @@ from playwright.sync_api import sync_playwright
 from advanced_data_mining.data.raw_ds import Restaurant
 from advanced_data_mining.data.raw_ds import Review
 
-_LOGGER = logging.getLogger(__name__)
+
+def _logger():
+    return logging.getLogger(__name__)
+
 
 _RESTAURANT_CARD_SELECTOR = 'div.Nv2PK.THOPZb.CpccDe'
 _REVIEWS_CONTAINER_SELECTOR = 'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde'
@@ -63,7 +66,6 @@ class MapsBrowser:
         self._reviews_scroll_retries = 5
         self._max_reviews_per_restaurant = max_reviews_per_restaurant
 
-    # --------------------------------------------------------------------- Public API
     def get_locations_by_query(self, google_maps_query: str) -> list[Restaurant]:
         """Fetch location cards returned by Google Maps for a search query."""
         locations: list[Restaurant] = []
@@ -82,7 +84,7 @@ class MapsBrowser:
             try:
                 page.goto('https://www.google.com/maps', timeout=10000)
             except Exception as exc:  # pylint: disable=broad-except
-                _LOGGER.error('Failed to open Google Maps: %s', exc)
+                _logger().error('Failed to open Google Maps: %s', exc)
                 return locations
 
             self._open_restaurants_panel(page, google_maps_query)
@@ -112,7 +114,7 @@ class MapsBrowser:
             try:
                 page.goto(location.href, timeout=10000)
             except Exception as exc:  # pylint: disable=broad-except
-                _LOGGER.error(
+                _logger().error(
                     'Failed to open location page: %s, error: %s', location.href, exc
                 )
                 return
@@ -123,7 +125,7 @@ class MapsBrowser:
             side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR).first
             review_divs = side_panel.locator(_REVIEW_SELECTOR)
 
-            _LOGGER.debug(
+            _logger().debug(
                 'Found %d reviews for location: %s',
                 review_divs.count(),
                 location.name,
@@ -136,7 +138,7 @@ class MapsBrowser:
                     if review is not None:
                         yield review
                 except Exception as exc:  # pylint: disable=broad-except
-                    _LOGGER.error('Failed to extract review: %s', exc)
+                    _logger().error('Failed to extract review: %s', exc)
 
     # ----------------------------------------------------------------- Page helpers
     def _open_more_reviews(self, page: Page) -> None:
@@ -147,7 +149,7 @@ class MapsBrowser:
             button.first.click(timeout=4000)
             page.wait_for_timeout(2000)
         except Exception as exc:  # pylint: disable=broad-except
-            _LOGGER.debug('Failed to click More reviews button: %s', exc)
+            _logger().debug('Failed to click More reviews button: %s', exc)
 
     def _open_restaurants_panel(self, page: Page, query: str) -> None:
         search_panel = page.locator('input[id="searchboxinput"]')
@@ -166,14 +168,14 @@ class MapsBrowser:
     def _scroll_reviews_to_end(self, page: Page) -> None:
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR)
         if side_panel.count() == 0:
-            _LOGGER.critical('Cannot find reviews side panel!')
+            _logger().critical('Cannot find reviews side panel!')
             return
 
         side_panel = side_panel.first
         review_divs = side_panel.locator(_REVIEW_SELECTOR)
 
         if review_divs.count() == 0:
-            _LOGGER.warning('No reviews found in the side panel!')
+            _logger().warning('No reviews found in the side panel!')
             return
 
         review_divs_count = review_divs.count()
@@ -191,7 +193,7 @@ class MapsBrowser:
             review_divs = side_panel.locator(_REVIEW_SELECTOR)
             new_count = review_divs.count()
 
-            _LOGGER.debug(
+            _logger().debug(
                 'Scrolled reviews panel, found %d reviews so far.', new_count
             )
 
@@ -261,8 +263,11 @@ class MapsBrowser:
         texts.harmonize(self._normalize_text)
 
         if not self._has_meaningful_text(texts.translated):
+            _logger().debug('Skipping review with no meaningful text: %s', texts.translated)
             return None
+
         if not self._long_enough(texts.translated):
+            _logger().debug('Skipping review with too short text: %s', texts.translated)
             return None
 
         return Review(
@@ -311,7 +316,7 @@ class MapsBrowser:
                 if refreshed:
                     return refreshed[-1]
             except Exception as exc:  # pylint: disable=broad-except
-                _LOGGER.debug('Failed to click "%s": %s', selector, exc)
+                _logger().debug('Failed to click "%s": %s', selector, exc)
         return ''
 
     def _read_review_spans(self, review_div: Locator) -> list[str]:
