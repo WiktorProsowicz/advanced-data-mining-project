@@ -11,6 +11,23 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
+import torch
+
+from advanced_data_mining.data import text_processing
+from advanced_data_mining.utils import misc
+
+
+def is_outlier(series: pd.Series) -> bool:
+    """Determines what sentences are outliers using the IQR method."""
+
+    q1 = series.quantile(0.25)
+    q3 = series.quantile(0.75)
+    iqr = q3 - q1
+
+    lower_bound = q1 - 1.5 * iqr
+    upper_bound = q3 + 1.5 * iqr
+
+    return (series < lower_bound) | (series > upper_bound)
 
 
 class EDAFeatureExtractor:
@@ -121,6 +138,36 @@ class EDAFeatureExtractor:
         figures.update(self._get_length_clustering_figures())
 
         return figures
+
+    def get_example_reviews(self) -> Dict[str, Any]:
+        """Returns example reviews from the dataset.
+
+        The reviews are selected from those containing most/least frequent words, as well as the
+        outliers in terms of length.
+        """
+
+        sentence_outliers = self._ds[
+            is_outlier(self._numerical_stats['num_sentences'])
+        ].sample(n=5)
+
+        word_outliers = self._ds[
+            is_outlier(self._numerical_stats['num_words'])
+        ].sample(n=5)
+
+        containing_most_frequent = self._ds[
+            self._bow_nzero_df['top'] >= 0
+        ].sample(n=5)
+
+        containing_least_frequent = self._ds[
+            self._bow_nzero_df['bottom'] >= 0
+        ].sample(n=5)
+
+        return {
+            'sentence_outliers': sentence_outliers.to_dict(orient='records'),
+            'word_outliers': word_outliers.to_dict(orient='records'),
+            'containing_most_frequent': containing_most_frequent.to_dict(orient='records'),
+            'containing_least_frequent': containing_least_frequent.to_dict(orient='records'),
+        }
 
     def _get_length_clustering_figures(self) -> Dict[str, plt.Figure]:
         """Generates figures showing clustering with respect to review length."""
