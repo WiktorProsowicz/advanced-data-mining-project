@@ -21,8 +21,31 @@ class EDAFeatureExtractor:
         self._processed_ds_path = processed_ds_path
 
         self._ds = pd.read_pickle(os.path.join(self._processed_ds_path, 'preprocessed_dataset.pkl'))
+
+        self._paths_df = self._ds[['restaurant_href']]
+
+        for col in ['bow_representations_bottom',
+                    'bow_representations_top',
+                    'bow_representations_full',
+                    'tfidf_representations_bottom',
+                    'tfidf_representations_top',
+                    'tfidf_representations_full',
+                    'sentence_bert_embeddings']:
+
+            paths_series = self._ds.index.to_series().apply(
+                lambda idx: os.path.join(self._processed_ds_path,
+                                         col,  # pylint: disable=cell-var-from-loop
+                                         misc.hash_restaurant_href(
+                                             self._ds.at[idx, 'restaurant_href']),
+                                         f"{idx}.pt")
+            )
+
+            self._paths_df = pd.concat([self._paths_df, paths_series.rename(col)], axis=1)
+
         self._numerical_stats = pd.read_pickle(os.path.join(self._processed_ds_path,
                                                             'numerical_features.pkl'))
+
+        self._bow_nzero_df = self._get_bbow_nzero_df()
 
     def extract_basic_stats(self) -> Dict[str, Any]:
         """Extracts basic statistics from the dataset."""
@@ -71,6 +94,18 @@ class EDAFeatureExtractor:
                 len(self._numerical_stats[self._numerical_stats[vol_col] == 0]))
 
             stats[f'velocity_volume_stats_cl_{chunk_length}_sz_{chunk_size}'] = vel_vol_stats
+
+        bbow_stats: Dict[str, Any] = {}
+
+        for bbow_type in ['top', 'bottom', 'full']:
+
+            bbow_stats[bbow_type] = {
+                'min_non_zero': int(self._bow_nzero_df[bbow_type].min()),
+                'max_non_zero': int(self._bow_nzero_df[bbow_type].max()),
+                'avg_non_zero': float(self._bow_nzero_df[bbow_type].mean())
+            }
+
+        stats['bbow_stats'] = bbow_stats
 
         return stats
 
@@ -142,7 +177,7 @@ class EDAFeatureExtractor:
         threshold = self._numerical_stats['num_words'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_words'] < threshold]
 
-        fig, axes = plt.subplots(5, figsize=(8, 15))
+        fig, axes = plt.subplots(5, figsize=(8, 25))
 
         for i, rating in enumerate(range(1, 6)):
             ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
@@ -156,7 +191,7 @@ class EDAFeatureExtractor:
         threshold = self._numerical_stats['num_sentences'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_sentences'] < threshold]
 
-        fig, axes = plt.subplots(5, figsize=(8, 15))
+        fig, axes = plt.subplots(5, figsize=(8, 25))
 
         for i, rating in enumerate(range(1, 6)):
             ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
@@ -166,6 +201,17 @@ class EDAFeatureExtractor:
             axes[i].set_ylabel('Number of Reviews')
 
         figures['num_sentences_distribution'] = fig
+
+        fig, axes = plt.subplots(3, figsize=(8, 18))
+
+        for i, bow_type in enumerate(['top', 'bottom', 'full']):
+            axes[i].hist(self._bow_nzero_df[bow_type], bins=100, color='purple')
+            axes[i].set_title(
+                f'Distribution of Non-Zero BOW Features ({bow_type.capitalize()} Words)')
+            axes[i].set_xlabel('Number of Non-Zero BOW Features')
+            axes[i].set_ylabel('Number of Reviews')
+
+        figures['bow_nzero_distribution'] = fig
 
         return figures
 
@@ -227,3 +273,17 @@ class EDAFeatureExtractor:
                 chunk_infos.add((chunk_length, chunk_size))
 
         return chunk_infos
+
+    def _get_bbow_nzero_df(self) -> pd.DataFrame:
+
+        def get_bbow_nzero(bbow_path: str) -> int:
+            bbow = torch.load(bbow_path)
+            return bbow.indices().size(1)
+
+        sizes_df = self._paths_df.copy()
+
+        sizes_df['top'] = sizes_df['bow_representations_top'].apply(get_bbow_nzero)
+        sizes_df['bottom'] = sizes_df['bow_representations_bottom'].apply(get_bbow_nzero)
+        sizes_df['full'] = sizes_df['bow_representations_full'].apply(get_bbow_nzero)
+
+        return sizes_df[['top', 'bottom', 'full']]
