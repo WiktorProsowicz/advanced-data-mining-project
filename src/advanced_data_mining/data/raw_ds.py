@@ -29,6 +29,7 @@ class Review:
     translated: bool = False
     original: str = ''
 
+
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]
 
 
@@ -65,7 +66,7 @@ class RawDSLoader:
 
             for review in data['reviews']:
                 translated_flag = bool(review.get('translated',
-                review.get('is_translated', False)))
+                                                  review.get('is_translated', False)))
                 original_text = review.get('original', review.get('original_text', ''))
 
                 reviews.append(

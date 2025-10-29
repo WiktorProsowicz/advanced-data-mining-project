@@ -6,7 +6,8 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterator, List, Optional
+from typing import Callable
+from typing import Iterator
 
 from playwright.sync_api import Locator
 from playwright.sync_api import Page
@@ -17,9 +18,9 @@ from advanced_data_mining.data.raw_ds import Review
 
 _LOGGER = logging.getLogger(__name__)
 
-_RESTAURANT_CARD_SELECTOR = "div.Nv2PK.THOPZb.CpccDe"
-_REVIEWS_CONTAINER_SELECTOR = "div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde"
-_REVIEW_SELECTOR = "div.jftiEf"
+_RESTAURANT_CARD_SELECTOR = 'div.Nv2PK.THOPZb.CpccDe'
+_REVIEWS_CONTAINER_SELECTOR = 'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde'
+_REVIEW_SELECTOR = 'div.jftiEf'
 _SHOW_ORIGINAL_SELECTORS = (
     'button:has-text("See original")',
     'button:has-text("Show original")',
@@ -43,7 +44,7 @@ class ReviewTexts:
         and blank the original field to avoid duplicating content downstream.
         """
         if not self.is_translated:
-            self.original = ""
+            self.original = ''
             return
 
         if not self.original:
@@ -51,21 +52,21 @@ class ReviewTexts:
 
         if normalizer(self.translated) == normalizer(self.original):
             self.is_translated = False
-            self.original = ""
+            self.original = ''
 
 
 class MapsBrowser:
     """Iterates over Google Maps search results and scrapes reviews from locations."""
 
-    def __init__(self, proxy_cfg: Dict[str, str], max_reviews_per_restaurant: int):
+    def __init__(self, proxy_cfg: dict[str, str], max_reviews_per_restaurant: int):
         self._proxy_cfg = proxy_cfg
         self._reviews_scroll_retries = 5
         self._max_reviews_per_restaurant = max_reviews_per_restaurant
 
     # --------------------------------------------------------------------- Public API
-    def get_locations_by_query(self, google_maps_query: str) -> List[Restaurant]:
+    def get_locations_by_query(self, google_maps_query: str) -> list[Restaurant]:
         """Fetch location cards returned by Google Maps for a search query."""
-        locations: List[Restaurant] = []
+        locations: list[Restaurant] = []
 
         with sync_playwright() as playwright:
             browser = playwright.firefox.launch(
@@ -73,15 +74,15 @@ class MapsBrowser:
                 proxy=self._proxy_cfg,  # type: ignore[arg-type]
             )
             context = browser.new_context(
-                locale="en-US",
-                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+                locale='en-US',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
             )
             page = context.new_page()
 
             try:
-                page.goto("https://www.google.com/maps", timeout=10000)
+                page.goto('https://www.google.com/maps', timeout=10000)
             except Exception as exc:  # pylint: disable=broad-except
-                _LOGGER.error("Failed to open Google Maps: %s", exc)
+                _LOGGER.error('Failed to open Google Maps: %s', exc)
                 return locations
 
             self._open_restaurants_panel(page, google_maps_query)
@@ -102,8 +103,8 @@ class MapsBrowser:
                 proxy=self._proxy_cfg,  # type: ignore[arg-type]
             )
             context = browser.new_context(
-                locale="en-US",
-                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+                locale='en-US',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
             )
             page = context.new_page()
             page.set_default_timeout(2000)
@@ -112,7 +113,7 @@ class MapsBrowser:
                 page.goto(location.href, timeout=10000)
             except Exception as exc:  # pylint: disable=broad-except
                 _LOGGER.error(
-                    "Failed to open location page: %s, error: %s", location.href, exc
+                    'Failed to open location page: %s, error: %s', location.href, exc
                 )
                 return
 
@@ -123,7 +124,7 @@ class MapsBrowser:
             review_divs = side_panel.locator(_REVIEW_SELECTOR)
 
             _LOGGER.debug(
-                "Found %d reviews for location: %s",
+                'Found %d reviews for location: %s',
                 review_divs.count(),
                 location.name,
             )
@@ -135,7 +136,7 @@ class MapsBrowser:
                     if review is not None:
                         yield review
                 except Exception as exc:  # pylint: disable=broad-except
-                    _LOGGER.error("Failed to extract review: %s", exc)
+                    _LOGGER.error('Failed to extract review: %s', exc)
 
     # ----------------------------------------------------------------- Page helpers
     def _open_more_reviews(self, page: Page) -> None:
@@ -146,7 +147,7 @@ class MapsBrowser:
             button.first.click(timeout=4000)
             page.wait_for_timeout(2000)
         except Exception as exc:  # pylint: disable=broad-except
-            _LOGGER.debug("Failed to click More reviews button: %s", exc)
+            _LOGGER.debug('Failed to click More reviews button: %s', exc)
 
     def _open_restaurants_panel(self, page: Page, query: str) -> None:
         search_panel = page.locator('input[id="searchboxinput"]')
@@ -159,20 +160,20 @@ class MapsBrowser:
         search_panel.first.fill(query)
         page.wait_for_timeout(800)
 
-        search_panel.first.press("Enter")
+        search_panel.first.press('Enter')
         page.wait_for_timeout(4000)
 
     def _scroll_reviews_to_end(self, page: Page) -> None:
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR)
         if side_panel.count() == 0:
-            _LOGGER.critical("Cannot find reviews side panel!")
+            _LOGGER.critical('Cannot find reviews side panel!')
             return
 
         side_panel = side_panel.first
         review_divs = side_panel.locator(_REVIEW_SELECTOR)
 
         if review_divs.count() == 0:
-            _LOGGER.warning("No reviews found in the side panel!")
+            _LOGGER.warning('No reviews found in the side panel!')
             return
 
         review_divs_count = review_divs.count()
@@ -183,7 +184,7 @@ class MapsBrowser:
                 return
 
             page.evaluate(
-                "(el) => el.scrollTop = el.scrollHeight", side_panel.element_handle()
+                '(el) => el.scrollTop = el.scrollHeight', side_panel.element_handle()
             )
             page.wait_for_timeout(1000)
 
@@ -191,7 +192,7 @@ class MapsBrowser:
             new_count = review_divs.count()
 
             _LOGGER.debug(
-                "Scrolled reviews panel, found %d reviews so far.", new_count
+                'Scrolled reviews panel, found %d reviews so far.', new_count
             )
 
             if new_count == review_divs_count:
@@ -205,7 +206,7 @@ class MapsBrowser:
 
     def _scroll_restaurants_to_end(self, page: Page) -> None:
         results_side = page.locator(
-            "div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde.ecceSd"
+            'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde.ecceSd'
         )
 
         if results_side.count() == 0:
@@ -221,7 +222,7 @@ class MapsBrowser:
 
         while containers_count > 0:
             page.evaluate(
-                "el => el.scrollBy(0, el.scrollHeight)", results_side.element_handle()
+                'el => el.scrollBy(0, el.scrollHeight)', results_side.element_handle()
             )
             page.wait_for_timeout(1000)
 
@@ -234,20 +235,20 @@ class MapsBrowser:
             containers_count = new_count
 
     def _extract_location(self, restaurant_div: Locator) -> Restaurant:
-        href = restaurant_div.locator("a.hfpxzc").first.get_attribute("href")
+        href = restaurant_div.locator('a.hfpxzc').first.get_attribute('href')
 
-        basic_info_div = restaurant_div.locator("div.UaQhfb").first
-        restaurant_name = basic_info_div.locator("div.NrDZNb").first.inner_text()
+        basic_info_div = restaurant_div.locator('div.UaQhfb').first
+        restaurant_name = basic_info_div.locator('div.NrDZNb').first.inner_text()
 
-        el = basic_info_div.locator("div.W4Efsd").nth(1)
-        basic_info_div = el.locator("div.W4Efsd").first
+        el = basic_info_div.locator('div.W4Efsd').nth(1)
+        basic_info_div = el.locator('div.W4Efsd').first
         basic_info = basic_info_div.inner_text()
 
         return Restaurant(href=href, name=restaurant_name, basic_info=basic_info)
 
     # ----------------------------------------------------------------- Review helpers
-    def _extract_review(self, review_div: Locator) -> Optional[Review]:
-        more_btn = review_div.locator("button.w8nwRe.kyuRq")
+    def _extract_review(self, review_div: Locator) -> Review | None:
+        more_btn = review_div.locator('button.w8nwRe.kyuRq')
         if more_btn.count() > 0:
             try:
                 more_btn.first.click(timeout=800)
@@ -255,7 +256,7 @@ class MapsBrowser:
             except Exception:  # pylint: disable=broad-except
                 pass
 
-        rating = self._extract_rating(review_div.locator("span.kvMYJc").first)
+        rating = self._extract_rating(review_div.locator('span.kvMYJc').first)
         texts = self._extract_texts(review_div)
         texts.harmonize(self._normalize_text)
 
@@ -268,17 +269,17 @@ class MapsBrowser:
             text=texts.translated.strip(),
             rating=rating,
             translated=texts.is_translated,
-            original=texts.original.strip() if texts.is_translated else "",
+            original=texts.original.strip() if texts.is_translated else '',
         )
 
     def _extract_texts(self, review_div: Locator) -> ReviewTexts:
         text_spans = self._read_review_spans(review_div)
-        translated_text = text_spans[0] if text_spans else ""
+        translated_text = text_spans[0] if text_spans else ''
 
-        dataset = review_div.evaluate("el => el.dataset || {}") or {}
-        dataset_original = ""
+        dataset = review_div.evaluate('el => el.dataset || {}') or {}
+        dataset_original = ''
         if isinstance(dataset, dict):
-            dataset_original = (dataset.get("originalReviewText") or "").strip()
+            dataset_original = (dataset.get('originalReviewText') or '').strip()
 
         has_marker = review_div.locator(_TRANSLATED_MARKER_SELECTOR).count() > 0
         is_translated = bool(has_marker or dataset_original)
@@ -311,30 +312,30 @@ class MapsBrowser:
                     return refreshed[-1]
             except Exception as exc:  # pylint: disable=broad-except
                 _LOGGER.debug('Failed to click "%s": %s', selector, exc)
-        return ""
+        return ''
 
-    def _read_review_spans(self, review_div: Locator) -> List[str]:
-        spans = review_div.locator("span.wiI7pd").all_inner_texts()
+    def _read_review_spans(self, review_div: Locator) -> list[str]:
+        spans = review_div.locator('span.wiI7pd').all_inner_texts()
         return [text.strip() for text in spans if text and text.strip()]
 
     def _extract_rating(self, stars_span: Locator) -> float:
-        aria = stars_span.get_attribute("aria-label") or ""
-        isolated_num = re.search(r"[\d]+", aria)
+        aria = stars_span.get_attribute('aria-label') or ''
+        isolated_num = re.search(r'[\d]+', aria)
         return float(isolated_num.group(0)) if isolated_num else 0.0
 
     # ----------------------------------------------------------------- Text filters
     def _normalize_text(self, text: str) -> str:
-        normalized = unicodedata.normalize("NFKC", text or "")
-        normalized = re.sub(r"\s+", " ", normalized).strip()
+        normalized = unicodedata.normalize('NFKC', text or '')
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
         return normalized.casefold()
 
     def _has_meaningful_text(self, text: str) -> bool:
         if not text:
             return False
-        has_letter = re.search(r"[A-Za-zÀ-ž]", text) is not None
-        alnum_len = len(re.findall(r"[0-9A-Za-zÀ-ž]", text))
+        has_letter = re.search(r'[A-Za-zÀ-ž]', text) is not None
+        alnum_len = len(re.findall(r'[0-9A-Za-zÀ-ž]', text))
         return has_letter and alnum_len >= 3
 
     def _long_enough(self, text: str) -> bool:
-        tokens = re.findall(r"\w+", text, flags=re.UNICODE)
+        tokens = re.findall(r'\w+', text, flags=re.UNICODE)
         return len(tokens) >= 2 or len(self._normalize_text(text)) >= 10
