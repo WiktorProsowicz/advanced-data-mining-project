@@ -62,22 +62,6 @@ class RawDSLoader:
                 city=city
             )
 
-            reviews: List[Review] = []
-
-            for review in data['reviews']:
-                translated_flag = bool(review.get('translated',
-                                                  review.get('is_translated', False)))
-                original_text = review.get('original', review.get('original_text', ''))
-
-                reviews.append(
-                    Review(
-                        text=review['text'],
-                        rating=review['rating'],
-                        translated=translated_flag,
-                        original=original_text if translated_flag else ''
-                    )
-                )
-
-            ds[location] = reviews
+            ds[location] = [Review(**review) for review in data['reviews']]
 
         return ds
