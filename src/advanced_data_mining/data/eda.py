@@ -13,7 +13,6 @@ import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 import torch
 
-from advanced_data_mining.data import text_processing
 from advanced_data_mining.utils import misc
 
 
@@ -54,7 +53,7 @@ class EDAFeatureExtractor:
                                          col,  # pylint: disable=cell-var-from-loop
                                          misc.hash_restaurant_href(
                                              self._ds.at[idx, 'restaurant_href']),
-                                         f"{idx}.pt")
+                                         f'{idx}.pt')
             )
 
             self._paths_df = pd.concat([self._paths_df, paths_series.rename(col)], axis=1)

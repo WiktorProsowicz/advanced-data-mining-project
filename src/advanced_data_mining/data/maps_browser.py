@@ -239,6 +239,10 @@ class MapsBrowser:
     def _extract_location(self, restaurant_div: Locator) -> Restaurant:
         href = restaurant_div.locator('a.hfpxzc').first.get_attribute('href')
 
+        if href is None:
+            _logger().warning('Restaurant card missing href attribute!')
+            href = ''
+
         basic_info_div = restaurant_div.locator('div.UaQhfb').first
         restaurant_name = basic_info_div.locator('div.NrDZNb').first.inner_text()
 

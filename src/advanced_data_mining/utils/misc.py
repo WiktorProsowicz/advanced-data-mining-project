@@ -1,5 +1,5 @@
+# -*- coding: utf-8 -*-
 """Contains miscellaneous utility functions."""
-
 import hashlib
 
 
