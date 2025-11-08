@@ -123,6 +123,20 @@ class EDAFeatureExtractor:
 
         stats['bbow_stats'] = bbow_stats
 
+        traslation_stats: Dict[str, Any] = {}
+
+        traslation_stats['n_reviews_translated'] = int(
+            len(self._ds[self._ds['is_translated']]))
+
+        translated_percentages = self._ds.groupby('review_rating')['is_translated'].mean()
+
+        for rating in range(1, 6):
+            traslation_stats[f'rating_{rating}_translated_percentage'] = float(
+                translated_percentages[rating]
+            )
+
+        stats['translation_stats'] = traslation_stats
+
         return stats
 
     def get_figures(self) -> Dict[str, plt.Figure]:
@@ -268,14 +282,19 @@ class EDAFeatureExtractor:
 
         chunk_infos = self._get_vol_vel_chunk_infos()
 
-        fig, axes = plt.subplots(len(chunk_infos), 2, figsize=(12, 6 * len(chunk_infos)))
+        fig, axes = plt.subplots(len(chunk_infos), 3, figsize=(12, 6 * len(chunk_infos)))
 
         for i, (chunk_length, chunk_size) in enumerate(chunk_infos):
 
             vel_col = f'trace_velocity_cl_{chunk_length}_sz_{chunk_size}'
             vol_col = f'trace_volume_cl_{chunk_length}_sz_{chunk_size}'
 
-            chosen_reviews = self._numerical_stats[self._numerical_stats[vel_col] > 0]
+            chosen_reviews = pd.concat([self._numerical_stats[vel_col],
+                                        self._numerical_stats[vol_col],
+                                        self._numerical_stats['review_rating'],
+                                        self._numerical_stats['is_from_cracow'],
+                                        self._ds['is_translated']], axis=1)
+            chosen_reviews = chosen_reviews[chosen_reviews[vel_col] > 0]
             chosen_reviews = chosen_reviews[chosen_reviews[vol_col] > 0]
             chosen_reviews = chosen_reviews.sample(n=min(1000, len(chosen_reviews)))
 
@@ -287,7 +306,7 @@ class EDAFeatureExtractor:
                     label=f'Rating {rating}'
                 )
 
-            axes[i, 0].set_title(f'Clustering of Velocity vs Volume (Chunk Length: {chunk_length})')
+            axes[i, 0].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
             axes[i, 0].set_xlabel('Trace Velocity')
             axes[i, 0].set_ylabel('Trace Volume')
             axes[i, 0].legend()
@@ -298,10 +317,21 @@ class EDAFeatureExtractor:
             axes[i, 1].scatter(chosen_reviews[vel_col][~chosen_reviews['is_from_cracow']],
                                chosen_reviews[vol_col][~chosen_reviews['is_from_cracow']],
                                alpha=0.5, label='From Warsaw')
-            axes[i, 1].set_title(f'Velocity vs Volume (CL: {chunk_length}, SZ={chunk_size})')
+            axes[i, 1].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
             axes[i, 1].set_xlabel('Trace Velocity')
             axes[i, 1].set_ylabel('Trace Volume')
             axes[i, 1].legend()
+
+            axes[i, 2].scatter(chosen_reviews[vel_col][chosen_reviews['is_translated']],
+                               chosen_reviews[vol_col][chosen_reviews['is_translated']],
+                               alpha=0.5, label='Translated')
+            axes[i, 2].scatter(chosen_reviews[vel_col][~chosen_reviews['is_translated']],
+                               chosen_reviews[vol_col][~chosen_reviews['is_translated']],
+                               alpha=0.5, label='Not Translated')
+            axes[i, 2].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
+            axes[i, 2].set_xlabel('Trace Velocity')
+            axes[i, 2].set_ylabel('Trace Volume')
+            axes[i, 2].legend()
 
         figures['clustering_velocity_volume'] = fig
 
