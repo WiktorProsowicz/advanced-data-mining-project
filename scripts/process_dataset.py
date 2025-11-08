@@ -64,12 +64,15 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
                  restaurant.basic_info,
                  restaurant.city == 'Krakow',
                  preprocessed_text,
+                 review.original,
+                 review.translated,
                  review.rating)
             )
 
     prep_ds = pd.DataFrame(preprocessed_reviews,
                            columns=['restaurant_href', 'restaurant_name', 'restaurant_basic_info',
-                                    'is_from_cracow', 'review_text', 'review_rating'])
+                                    'is_from_cracow', 'review_text', 'original_text',
+                                    'is_translated', 'review_rating'])
 
     prep_ds.to_pickle(preprocessed_ds_path)
 
@@ -129,6 +132,9 @@ def _prepare_bert_embeddings(dataset: pd.DataFrame,
         os.makedirs(os.path.dirname(word_embs_path), exist_ok=True)
         os.makedirs(os.path.dirname(sentence_embs_path), exist_ok=True)
 
+        if os.path.exists(word_embs_path) and os.path.exists(sentence_embs_path):
+            continue
+
         word_embs, sentence_embs = text_processor.get_bert_embeddings(row['review_text'])
 
         torch.save(word_embs, word_embs_path)
@@ -152,12 +158,9 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
                               desc='Generating numerical features',
                               total=len(dataset)):
 
-        hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
-        os.makedirs(os.path.join(output_dir, 'bert_embeddings', str(hashed_dir)), exist_ok=True)
-
         embeddings = torch.load(os.path.join(output_dir,
                                              'word_bert_embeddings',
-                                             str(hashed_dir),
+                                             misc.hash_restaurant_href(row['restaurant_href']),
                                              f'{idx}.pt'))
 
         for ch_len, step_size in chunks_data:
