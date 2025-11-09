@@ -9,7 +9,7 @@ import random
 
 import torch
 import pandas as pd  # type: ignore
-import lightning as pl
+import lightning as pl  # type: ignore
 
 from advanced_data_mining.utils import misc
 

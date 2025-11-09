@@ -26,6 +26,8 @@ class Review:
 
     text: str
     rating: float
+    translated: bool = False
+    original: str = ''
 
 
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]
@@ -60,13 +62,6 @@ class RawDSLoader:
                 city=city
             )
 
-            reviews = [
-                Review(
-                    text=review['text'],
-                    rating=review['rating']
-                ) for review in data['reviews']
-            ]
-
-            ds[location] = reviews
+            ds[location] = [Review(**review) for review in data['reviews']]
 
         return ds

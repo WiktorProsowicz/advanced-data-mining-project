@@ -11,6 +11,22 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
+import torch
+
+from advanced_data_mining.utils import misc
+
+
+def is_outlier(series: pd.Series) -> bool:
+    """Determines what sentences are outliers using the IQR method."""
+
+    q1 = series.quantile(0.25)
+    q3 = series.quantile(0.75)
+    iqr = q3 - q1
+
+    lower_bound = q1 - 1.5 * iqr
+    upper_bound = q3 + 1.5 * iqr
+
+    return (series < lower_bound) | (series > upper_bound)
 
 
 class EDAFeatureExtractor:
@@ -21,8 +37,31 @@ class EDAFeatureExtractor:
         self._processed_ds_path = processed_ds_path
 
         self._ds = pd.read_pickle(os.path.join(self._processed_ds_path, 'preprocessed_dataset.pkl'))
+
+        self._paths_df = self._ds[['restaurant_href']]
+
+        for col in ['bow_representations_bottom',
+                    'bow_representations_top',
+                    'bow_representations_full',
+                    'tfidf_representations_bottom',
+                    'tfidf_representations_top',
+                    'tfidf_representations_full',
+                    'sentence_bert_embeddings']:
+
+            paths_series = self._ds.index.to_series().apply(
+                lambda idx: os.path.join(self._processed_ds_path,
+                                         col,  # pylint: disable=cell-var-from-loop
+                                         misc.hash_restaurant_href(
+                                             self._ds.at[idx, 'restaurant_href']),
+                                         f'{idx}.pt')
+            )
+
+            self._paths_df = pd.concat([self._paths_df, paths_series.rename(col)], axis=1)
+
         self._numerical_stats = pd.read_pickle(os.path.join(self._processed_ds_path,
                                                             'numerical_features.pkl'))
+
+        self._bow_nzero_df = self._get_bbow_nzero_df()
 
     def extract_basic_stats(self) -> Dict[str, Any]:
         """Extracts basic statistics from the dataset."""
@@ -72,6 +111,32 @@ class EDAFeatureExtractor:
 
             stats[f'velocity_volume_stats_cl_{chunk_length}_sz_{chunk_size}'] = vel_vol_stats
 
+        bbow_stats: Dict[str, Any] = {}
+
+        for bbow_type in ['top', 'bottom', 'full']:
+
+            bbow_stats[bbow_type] = {
+                'min_non_zero': int(self._bow_nzero_df[bbow_type].min()),
+                'max_non_zero': int(self._bow_nzero_df[bbow_type].max()),
+                'avg_non_zero': float(self._bow_nzero_df[bbow_type].mean())
+            }
+
+        stats['bbow_stats'] = bbow_stats
+
+        traslation_stats: Dict[str, Any] = {}
+
+        traslation_stats['n_reviews_translated'] = int(
+            len(self._ds[self._ds['is_translated']]))
+
+        translated_percentages = self._ds.groupby('review_rating')['is_translated'].mean()
+
+        for rating in range(1, 6):
+            traslation_stats[f'rating_{rating}_translated_percentage'] = float(
+                translated_percentages[rating]
+            )
+
+        stats['translation_stats'] = traslation_stats
+
         return stats
 
     def get_figures(self) -> Dict[str, plt.Figure]:
@@ -86,6 +151,39 @@ class EDAFeatureExtractor:
         figures.update(self._get_length_clustering_figures())
 
         return figures
+
+    def get_example_reviews(self) -> Dict[str, Any]:
+        """Returns example reviews from the dataset.
+
+        The reviews are selected from those containing most/least frequent words, as well as the
+        outliers in terms of length.
+        """
+
+        sentence_outliers = self._ds[
+            is_outlier(self._numerical_stats['num_sentences'])
+        ].sample(n=5)
+
+        word_outliers = self._ds[
+            is_outlier(self._numerical_stats['num_words'])
+        ].sample(n=5)
+
+        containing_most_frequent = self._ds[
+            self._bow_nzero_df['top'] >= 0
+        ].sample(n=5)
+
+        containing_least_frequent = self._ds[
+            self._bow_nzero_df['bottom'] >= 0
+        ].sample(n=5)
+
+        full_bbow_with_zero_elements = self._ds[self._bow_nzero_df['full'] == 0].sample(n=15)
+
+        return {
+            'sentence_outliers': sentence_outliers.to_dict(orient='records'),
+            'word_outliers': word_outliers.to_dict(orient='records'),
+            'containing_most_frequent': containing_most_frequent.to_dict(orient='records'),
+            'containing_least_frequent': containing_least_frequent.to_dict(orient='records'),
+            'full_bbow_with_zero_elements': full_bbow_with_zero_elements.to_dict(orient='records')
+        }
 
     def _get_length_clustering_figures(self) -> Dict[str, plt.Figure]:
         """Generates figures showing clustering with respect to review length."""
@@ -127,22 +225,12 @@ class EDAFeatureExtractor:
 
         figures: Dict[str, plt.Figure] = {}
 
-        fig, ax = plt.subplots()
-
-        ax.hist(self._ds['review_rating'], bins=5, range=(1, 6),
-                align='left', rwidth=0.8,
-                weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
-        ax.set_title('Distribution of Review Ratings')
-        ax.set_xlabel('Review Rating')
-        ax.set_ylabel('Percentage of Reviews')
-        ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
-
-        figures['review_rating_distribution'] = fig
+        figures['review_rating_distribution'] = self._get_rating_distribution_figure()
 
         threshold = self._numerical_stats['num_words'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_words'] < threshold]
 
-        fig, axes = plt.subplots(5, figsize=(8, 15))
+        fig, axes = plt.subplots(5, figsize=(8, 25))
 
         for i, rating in enumerate(range(1, 6)):
             ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
@@ -156,7 +244,7 @@ class EDAFeatureExtractor:
         threshold = self._numerical_stats['num_sentences'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_sentences'] < threshold]
 
-        fig, axes = plt.subplots(5, figsize=(8, 15))
+        fig, axes = plt.subplots(5, figsize=(8, 25))
 
         for i, rating in enumerate(range(1, 6)):
             ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
@@ -167,7 +255,60 @@ class EDAFeatureExtractor:
 
         figures['num_sentences_distribution'] = fig
 
+        fig, axes = plt.subplots(3, figsize=(8, 18))
+
+        for i, bow_type in enumerate(['top', 'bottom', 'full']):
+            axes[i].hist(self._bow_nzero_df[bow_type], bins=100, color='purple')
+            axes[i].set_title(
+                f'Distribution of Non-Zero BOW Features ({bow_type.capitalize()} Words)')
+            axes[i].set_xlabel('Number of Non-Zero BOW Features')
+            axes[i].set_ylabel('Number of Reviews')
+
+        figures['bow_nzero_distribution'] = fig
+
         return figures
+
+    def _get_rating_distribution_figure(self) -> plt.Figure:
+        """Generates review rating distribution figures."""
+
+        fig, axes = plt.subplots(3, figsize=(8, 18))
+
+        axes[0].hist(
+            self._ds['review_rating'], bins=5, range=(1, 6),
+            align='left', rwidth=0.8,
+            weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
+        axes[0].set_title('Distribution of Review Ratings')
+
+        dist_translated = self._ds[self._ds['is_translated']].groupby('review_rating').size()
+        dist_not_translated = self._ds[~self._ds['is_translated']].groupby('review_rating').size()
+        dist_translated /= dist_translated.sum()
+        dist_not_translated /= dist_not_translated.sum()
+
+        axes[1].bar(dist_translated.index, dist_translated.values,
+                    label='Translated', width=0.2)
+        axes[1].bar(dist_not_translated.index + .2, dist_not_translated.values,
+                    label='Not Translated', width=0.2)
+        axes[1].set_title('Distribution of Review Ratings (Translated vs Not Translated)')
+        axes[1].legend()
+
+        dist_cracow = self._ds[self._ds['is_from_cracow']].groupby('review_rating').size()
+        dist_warsaw = self._ds[~self._ds['is_from_cracow']].groupby('review_rating').size()
+        dist_cracow /= dist_cracow.sum()
+        dist_warsaw /= dist_warsaw.sum()
+
+        axes[2].bar(dist_cracow.index, dist_cracow.values,
+                    label='From Cracow', width=0.2)
+        axes[2].bar(dist_warsaw.index + .2, dist_warsaw.values,
+                    label='From Warsaw', width=0.2)
+        axes[2].set_title('Distribution of Review Ratings (Cracow vs Warsaw)')
+        axes[2].legend()
+
+        for ax in axes:
+            ax.set_xlabel('Review Rating')
+            ax.set_ylabel('Percentage of Reviews')
+            ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
+
+        return fig
 
     def _get_velocity_volume_figures(self) -> Dict[str, plt.Figure]:
         """Generates velocity and volume clustering figures for EDA."""
@@ -176,14 +317,19 @@ class EDAFeatureExtractor:
 
         chunk_infos = self._get_vol_vel_chunk_infos()
 
-        fig, axes = plt.subplots(len(chunk_infos), 2, figsize=(12, 6 * len(chunk_infos)))
+        fig, axes = plt.subplots(len(chunk_infos), 3, figsize=(12, 6 * len(chunk_infos)))
 
         for i, (chunk_length, chunk_size) in enumerate(chunk_infos):
 
             vel_col = f'trace_velocity_cl_{chunk_length}_sz_{chunk_size}'
             vol_col = f'trace_volume_cl_{chunk_length}_sz_{chunk_size}'
 
-            chosen_reviews = self._numerical_stats[self._numerical_stats[vel_col] > 0]
+            chosen_reviews = pd.concat([self._numerical_stats[vel_col],
+                                        self._numerical_stats[vol_col],
+                                        self._numerical_stats['review_rating'],
+                                        self._numerical_stats['is_from_cracow'],
+                                        self._ds['is_translated']], axis=1)
+            chosen_reviews = chosen_reviews[chosen_reviews[vel_col] > 0]
             chosen_reviews = chosen_reviews[chosen_reviews[vol_col] > 0]
             chosen_reviews = chosen_reviews.sample(n=min(1000, len(chosen_reviews)))
 
@@ -195,7 +341,7 @@ class EDAFeatureExtractor:
                     label=f'Rating {rating}'
                 )
 
-            axes[i, 0].set_title(f'Clustering of Velocity vs Volume (Chunk Length: {chunk_length})')
+            axes[i, 0].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
             axes[i, 0].set_xlabel('Trace Velocity')
             axes[i, 0].set_ylabel('Trace Volume')
             axes[i, 0].legend()
@@ -206,10 +352,21 @@ class EDAFeatureExtractor:
             axes[i, 1].scatter(chosen_reviews[vel_col][~chosen_reviews['is_from_cracow']],
                                chosen_reviews[vol_col][~chosen_reviews['is_from_cracow']],
                                alpha=0.5, label='From Warsaw')
-            axes[i, 1].set_title(f'Velocity vs Volume (CL: {chunk_length}, SZ={chunk_size})')
+            axes[i, 1].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
             axes[i, 1].set_xlabel('Trace Velocity')
             axes[i, 1].set_ylabel('Trace Volume')
             axes[i, 1].legend()
+
+            axes[i, 2].scatter(chosen_reviews[vel_col][chosen_reviews['is_translated']],
+                               chosen_reviews[vol_col][chosen_reviews['is_translated']],
+                               alpha=0.5, label='Translated')
+            axes[i, 2].scatter(chosen_reviews[vel_col][~chosen_reviews['is_translated']],
+                               chosen_reviews[vol_col][~chosen_reviews['is_translated']],
+                               alpha=0.5, label='Not Translated')
+            axes[i, 2].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
+            axes[i, 2].set_xlabel('Trace Velocity')
+            axes[i, 2].set_ylabel('Trace Volume')
+            axes[i, 2].legend()
 
         figures['clustering_velocity_volume'] = fig
 
@@ -227,3 +384,17 @@ class EDAFeatureExtractor:
                 chunk_infos.add((chunk_length, chunk_size))
 
         return chunk_infos
+
+    def _get_bbow_nzero_df(self) -> pd.DataFrame:
+
+        def get_bbow_nzero(bbow_path: str) -> int:
+            bbow = torch.load(bbow_path)
+            return bbow.indices().size(1)
+
+        sizes_df = self._paths_df.copy()
+
+        sizes_df['top'] = sizes_df['bow_representations_top'].apply(get_bbow_nzero)
+        sizes_df['bottom'] = sizes_df['bow_representations_bottom'].apply(get_bbow_nzero)
+        sizes_df['full'] = sizes_df['bow_representations_full'].apply(get_bbow_nzero)
+
+        return sizes_df[['top', 'bottom', 'full']]

@@ -37,6 +37,14 @@ def main(script_cfg: omegaconf.DictConfig):
         fig_path = os.path.join(script_cfg.output_dir, f'{fig_name}.png')
         fig.savefig(fig_path)
 
+    _logger().info('Saving example reviews from the dataset...')
+
+    example_reviews = feature_extractor.get_example_reviews()
+
+    examples_path = os.path.join(script_cfg.output_dir, 'example_reviews.json')
+    with open(examples_path, 'w', encoding='utf-8') as f:
+        json.dump(example_reviews, f, indent=4, ensure_ascii=False)
+
 
 if __name__ == '__main__':
     main()  # pylint: disable=no-value-for-parameter

@@ -31,5 +31,15 @@
                 "dataset_path=tmp/processed_ds_1_0_0",
             ]
         },
+        {
+            "name": "Perform EDA",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/perform_eda.py",
+            "console": "integratedTerminal",
+            "args": [
+                "processed_ds_dir=tmp/processed_ds_v0.1",
+            ]
+        }
     ]
 }
