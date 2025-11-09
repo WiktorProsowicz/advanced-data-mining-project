@@ -175,11 +175,14 @@ class EDAFeatureExtractor:
             self._bow_nzero_df['bottom'] >= 0
         ].sample(n=5)
 
+        full_bbow_with_zero_elements = self._ds[self._bow_nzero_df['full'] == 0].sample(n=15)
+
         return {
             'sentence_outliers': sentence_outliers.to_dict(orient='records'),
             'word_outliers': word_outliers.to_dict(orient='records'),
             'containing_most_frequent': containing_most_frequent.to_dict(orient='records'),
             'containing_least_frequent': containing_least_frequent.to_dict(orient='records'),
+            'full_bbow_with_zero_elements': full_bbow_with_zero_elements.to_dict(orient='records')
         }
 
     def _get_length_clustering_figures(self) -> Dict[str, plt.Figure]:
@@ -222,17 +225,7 @@ class EDAFeatureExtractor:
 
         figures: Dict[str, plt.Figure] = {}
 
-        fig, ax = plt.subplots()
-
-        ax.hist(self._ds['review_rating'], bins=5, range=(1, 6),
-                align='left', rwidth=0.8,
-                weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
-        ax.set_title('Distribution of Review Ratings')
-        ax.set_xlabel('Review Rating')
-        ax.set_ylabel('Percentage of Reviews')
-        ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
-
-        figures['review_rating_distribution'] = fig
+        figures['review_rating_distribution'] = self._get_rating_distribution_figure()
 
         threshold = self._numerical_stats['num_words'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_words'] < threshold]
@@ -274,6 +267,48 @@ class EDAFeatureExtractor:
         figures['bow_nzero_distribution'] = fig
 
         return figures
+
+    def _get_rating_distribution_figure(self) -> plt.Figure:
+        """Generates review rating distribution figures."""
+
+        fig, axes = plt.subplots(3, figsize=(8, 18))
+
+        axes[0].hist(
+            self._ds['review_rating'], bins=5, range=(1, 6),
+            align='left', rwidth=0.8,
+            weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
+        axes[0].set_title('Distribution of Review Ratings')
+
+        dist_translated = self._ds[self._ds['is_translated']].groupby('review_rating').size()
+        dist_not_translated = self._ds[~self._ds['is_translated']].groupby('review_rating').size()
+        dist_translated /= dist_translated.sum()
+        dist_not_translated /= dist_not_translated.sum()
+
+        axes[1].bar(dist_translated.index, dist_translated.values,
+                    label='Translated', width=0.2)
+        axes[1].bar(dist_not_translated.index + .2, dist_not_translated.values,
+                    label='Not Translated', width=0.2)
+        axes[1].set_title('Distribution of Review Ratings (Translated vs Not Translated)')
+        axes[1].legend()
+
+        dist_cracow = self._ds[self._ds['is_from_cracow']].groupby('review_rating').size()
+        dist_warsaw = self._ds[~self._ds['is_from_cracow']].groupby('review_rating').size()
+        dist_cracow /= dist_cracow.sum()
+        dist_warsaw /= dist_warsaw.sum()
+
+        axes[2].bar(dist_cracow.index, dist_cracow.values,
+                    label='From Cracow', width=0.2)
+        axes[2].bar(dist_warsaw.index + .2, dist_warsaw.values,
+                    label='From Warsaw', width=0.2)
+        axes[2].set_title('Distribution of Review Ratings (Cracow vs Warsaw)')
+        axes[2].legend()
+
+        for ax in axes:
+            ax.set_xlabel('Review Rating')
+            ax.set_ylabel('Percentage of Reviews')
+            ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
+
+        return fig
 
     def _get_velocity_volume_figures(self) -> Dict[str, plt.Figure]:
         """Generates velocity and volume clustering figures for EDA."""
