@@ -28,7 +28,17 @@
             "program": "${workspaceFolder}/scripts/train_model.py",
             "console": "integratedTerminal",
             "args": [
-                "dataset_path=tmp/processed_ds_1_0_0",
+                "model_cfg.bow_encoders.bow_bottom=null",
+                "model_cfg.bow_encoders.tfidf_bottom=null",
+                "model_cfg.bow_encoders.tfidf_top=null",
+                "model_cfg.bow_encoders.pos_bow=null",
+                "model_cfg.bow_encoders.bow_full=null",
+                "model_cfg.bow_encoders.tfidf_full=null",
+                "model_cfg.numerical_feature_encoder.supported_features=[num_words,cl_3_sz_1]",
+                "model_cfg.numerical_feature_encoder.params.input_dim=3",
+                "model_cfg.post_net.input_dim=40",
+                "data_cfg.batch_size=2",
+                "data_cfg.n_workers=4"
             ]
         },
         {

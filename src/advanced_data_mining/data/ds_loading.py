@@ -6,6 +6,7 @@ import os
 import logging
 import sys
 import random
+import re
 
 import torch
 import pandas as pd  # type: ignore
@@ -43,39 +44,62 @@ class ProcessedDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
 
-        num_features = self._numerical_features.iloc[self._sample_indices[idx]]
-        num_features['is_from_cracow'] = float(num_features['is_from_cracow'])
+        sample_idx = self._sample_indices[idx]
+        num_features = self._numerical_features.iloc[sample_idx]
 
         restaurant_hash = misc.hash_restaurant_href(num_features['restaurant_href'])
 
         bow_bottom_path = os.path.join(self._ds_path,
                                        'bow_representations_bottom',
                                        restaurant_hash,
-                                       f'{idx}.pt')
+                                       f'{sample_idx}.pt')
 
         bow_top_path = os.path.join(self._ds_path,
                                     'bow_representations_top',
                                     restaurant_hash,
-                                    f'{idx}.pt')
+                                    f'{sample_idx}.pt')
 
         pos_bow_path = os.path.join(self._ds_path,
                                     'pos_bow',
                                     restaurant_hash,
-                                    f'{idx}.pt')
+                                    f'{sample_idx}.pt')
 
         tfidf_bottom_path = os.path.join(self._ds_path,
                                          'tfidf_representations_bottom',
                                          restaurant_hash,
-                                         f'{idx}.pt')
+                                         f'{sample_idx}.pt')
 
         tfidf_top_path = os.path.join(self._ds_path,
                                       'tfidf_representations_top',
                                       restaurant_hash,
-                                      f'{idx}.pt')
+                                      f'{sample_idx}.pt')
+
+        bow_full_path = os.path.join(self._ds_path,
+                                     'bow_representations_full',
+                                     restaurant_hash,
+                                     f'{sample_idx}.pt')
+
+        tfidf_full_path = os.path.join(self._ds_path,
+                                       'tfidf_representations_full',
+                                       restaurant_hash,
+                                       f'{sample_idx}.pt')
+
+        trace_cols = [col for col in self._numerical_features.columns
+                      if col.startswith('trace_')]
+
+        trace_re = re.compile(r'cl_(\d+)_sz_(\d+)')
+
+        trace_features_specs = set()
+
+        for col in trace_cols:
+            match = trace_re.search(col)
+            if match:
+                trace_features_specs.add(match.group(0))
 
         trace_features = {
-            col: torch.tensor(num_features[col], dtype=torch.float)
-            for col in num_features.index if col.startswith('trace_')
+            spec: torch.tensor([num_features[f'trace_velocity_{spec}'],
+                                num_features[f'trace_volume_{spec}']], dtype=torch.float32)
+            for spec in trace_features_specs
         }
 
         return {
@@ -84,10 +108,16 @@ class ProcessedDataset(torch.utils.data.Dataset):
             'pos_bow': torch.load(pos_bow_path).to_dense(),
             'tfidf_bottom': torch.load(tfidf_bottom_path).to_dense(),
             'tfidf_top': torch.load(tfidf_top_path).to_dense(),
-            'is_from_cracow': torch.tensor(num_features['is_from_cracow'], dtype=torch.float),
-            'num_words': torch.tensor(num_features['num_words'], dtype=torch.float),
-            'num_sentences': torch.tensor(num_features['num_sentences'], dtype=torch.float),
-            'review_rating': torch.tensor(num_features['review_rating'], dtype=torch.float),
+            'bow_full': torch.load(bow_full_path).to_dense(),
+            'tfidf_full': torch.load(tfidf_full_path).to_dense(),
+            'is_from_cracow': torch.tensor(num_features['is_from_cracow'],
+                                           dtype=torch.float32).unsqueeze(-1),
+            'num_words': torch.tensor(num_features['num_words'],
+                                      dtype=torch.float32).unsqueeze(-1),
+            'num_sentences': torch.tensor(num_features['num_sentences'],
+                                          dtype=torch.float32).unsqueeze(-1),
+            'review_rating': torch.tensor(num_features['review_rating'],
+                                          dtype=torch.float32),
             **trace_features
         }
 
