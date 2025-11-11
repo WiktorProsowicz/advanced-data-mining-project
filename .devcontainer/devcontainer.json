@@ -22,7 +22,8 @@
 				"ms-python.pylint",
 				"skellock.just",
 				"matangover.mypy",
-				"ms-toolsai.tensorboard"
+				"ms-toolsai.tensorboard",
+				"ms-toolsai.jupyter"
 			]
 		}
 	},

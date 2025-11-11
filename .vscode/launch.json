@@ -42,6 +42,17 @@
             ]
         },
         {
+            "name": "Train model - explicit file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train_model.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config-path", "/home/devcontainer/workspace/tmp/train_runs/choosing_bow_encoder",
+                "--config-name", "tfidf_full_hidden_dims_512_128_with_pos_hidden_dims_16_8"
+            ]
+        },
+        {
             "name": "Perform EDA",
             "type": "debugpy",
             "request": "launch",
