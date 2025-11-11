@@ -12,8 +12,8 @@ data_cfg:
 train_cfg:
   seed: 2137
   max_epochs: 50
-  classification_classes_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
-  reg_loss_weight: 1.0
+  classification_classes_weights: [6.0, 15.0, 15.0, 10.0, 1.5]
+  reg_loss_weight: 0.3
   cl_loss_weight: 1.0
 
 optimizer_cfg:

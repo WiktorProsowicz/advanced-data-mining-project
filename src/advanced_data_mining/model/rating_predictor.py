@@ -29,11 +29,15 @@ class RatingPredictor(pl.LightningModule):
             if model_cfg is not None
         })
 
-        self._num_features_encoder = modules.NumFeaturesEncoder(
-            **model_cfg['numerical_feature_encoder']['params']
-        )
+        self._num_features_encoder = None
+        self._supported_num_features = []
 
-        self._supported_num_features = model_cfg['numerical_feature_encoder']['supported_features']
+        if model_cfg.get('numerical_feature_encoder') is not None:
+            self._num_features_encoder = modules.NumFeaturesEncoder(
+                **model_cfg['numerical_feature_encoder']['params']
+            )
+
+            self._supported_num_features = model_cfg['numerical_feature_encoder']['supported_features']
 
         self._postnet = modules.PostNet(**model_cfg['post_net'])
 
@@ -75,14 +79,18 @@ class RatingPredictor(pl.LightningModule):
             for model_name in self._bow_encoders
         ]
 
-        encoded_num_features = self._num_features_encoder(
-            torch.cat(
-                [x[feature_name] for feature_name in self._supported_num_features],
-                dim=-1
+        if self._num_features_encoder is not None:
+            encoded_num_features = self._num_features_encoder(
+                torch.cat(
+                    [x[feature_name] for feature_name in self._supported_num_features],
+                    dim=-1
+                )
             )
-        )
 
-        combined_features = torch.cat(encoded_bow_features + [encoded_num_features], dim=-1)
+            combined_features = torch.cat(encoded_bow_features + [encoded_num_features], dim=-1)
+
+        else:
+            combined_features = torch.cat(encoded_bow_features, dim=-1)
 
         return self._postnet(combined_features)
 

@@ -27,6 +27,9 @@ def _logger():
 def main(cfg: omegaconf.DictConfig):
     """Runs the model training pipeline."""
 
+    _logger().info('Running training with configuration:\n%s',
+                   omegaconf.OmegaConf.to_yaml(cfg))
+
     if cfg.train_cfg.seed is not None:
         pl.seed_everything(cfg.train_cfg.seed, workers=True)
 
@@ -61,15 +64,18 @@ def main(cfg: omegaconf.DictConfig):
                     default_hp_metric=False
                 )
             ],
-            callbacks=[pl_callbacks.ModelCheckpoint(
-                dirpath=os.path.join(run_path, 'checkpoints'),
-                monitor='val/cl_accuracy',
-                mode='max',
-                save_top_k=2,
-                every_n_epochs=1)],
+            callbacks=[
+                pl_callbacks.ModelCheckpoint(
+                    dirpath=os.path.join(run_path, 'checkpoints'),
+                    monitor='val/cl_accuracy',
+                    mode='max',
+                    save_top_k=2,
+                    every_n_epochs=1),
+                pl_callbacks.EarlyStopping(
+                    monitor='val/cl_accuracy', min_delta=0.0,
+                    patience=3,
+                    mode='max')],
             num_sanity_val_steps=0,
-            limit_train_batches=50,
-            limit_val_batches=10,
             enable_checkpointing=True,
             check_val_every_n_epoch=1,
             log_every_n_steps=25

@@ -105,7 +105,7 @@ class ProcessedDataset(torch.utils.data.Dataset):
         return {
             'bow_bottom': torch.load(bow_bottom_path).to_dense(),
             'bow_top': torch.load(bow_top_path).to_dense(),
-            'pos_bow': torch.load(pos_bow_path).to_dense(),
+            'pos_bow': torch.load(pos_bow_path).to_dense().to(torch.float32),
             'tfidf_bottom': torch.load(tfidf_bottom_path).to_dense(),
             'tfidf_top': torch.load(tfidf_top_path).to_dense(),
             'bow_full': torch.load(bow_full_path).to_dense(),
