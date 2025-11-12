@@ -61,6 +61,14 @@
             "args": [
                 "processed_ds_dir=tmp/processed_ds_v0.1",
             ]
+        },
+        {
+            "name": "Summarize experiment",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/summarize_experiment.py",
+            "console": "integratedTerminal",
+            "args": []
         }
     ]
 }

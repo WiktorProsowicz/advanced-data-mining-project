@@ -1,0 +1,12 @@
+experiment_name: choosing_bow_encoder
+sort_by_metric: cl_accuracy
+metrics_for_plot_axes:
+  - [cl_precision, cl_recall]
+  - [regression_mae, classification_cross_entropy]
+summary_table_metrics:
+  - cl_accuracy
+  - cl_precision
+  - cl_recall
+  - regression_mae
+  - classification_cross_entropy
+output_path: tmp/exp_summary_choosing_bow_encoder
