@@ -48,7 +48,9 @@ class RatingPredictor(pl.LightningModule):
             'cl_accuracy': torchmetrics.Accuracy(task='multiclass', num_classes=5),
             'cl_f1_score': torchmetrics.F1Score(task='multiclass', num_classes=5,
                                                 average='weighted'),
-            'cl_recall': torchmetrics.Recall(task='multiclass', num_classes=5, average='weighted')
+            'cl_recall': torchmetrics.Recall(task='multiclass', num_classes=5, average='weighted'),
+            'cl_precision': torchmetrics.Precision(task='multiclass', num_classes=5,
+                                                   average='weighted'),
         }, prefix='train/')
 
         self._train_mae = torchmetrics.MeanAbsoluteError()
