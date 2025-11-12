@@ -56,8 +56,10 @@ class RatingPredictor(pl.LightningModule):
         self._val_metrics_cl = self._train_metrics_cl.clone(prefix='val/')
         self._conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
                                                       num_classes=5)
-
         self._val_mae = torchmetrics.MeanAbsoluteError()
+
+        self._test_metrics_cl = self._train_metrics_cl.clone(prefix='test/')
+        self._test_mae = torchmetrics.MeanAbsoluteError()
 
         self._reg_loss = torch.nn.MSELoss()
         self._cl_loss = torch.nn.CrossEntropyLoss(weight=torch.tensor(
@@ -161,6 +163,28 @@ class RatingPredictor(pl.LightningModule):
 
         self._val_metrics_cl.reset()
         self._val_mae.reset()
+
+    def test_step(self,  # pylint: disable=arguments-differ
+                  batch: Dict[str, torch.Tensor]) -> None:
+        """Performs test step."""
+
+        regression_pred, classification_pred = self.forward(batch)
+
+        _, reg_loss, cl_loss = self._calc_losses(
+            regression_pred, classification_pred, batch
+        )
+
+        self.log_dict({
+            'test/regression_mse': reg_loss,
+            'test/classification_cross_entropy': cl_loss
+        }, on_epoch=True)
+
+        self._test_metrics_cl(classification_pred,
+                              batch['review_rating'].long() - 1)
+        self.log_dict(self._test_metrics_cl, on_epoch=True)
+
+        self._test_mae(regression_pred, batch['review_rating'])
+        self.log('test/regression_mae', self._test_mae, on_epoch=True)
 
     def _calc_losses(self,
                      reg_outputs: torch.Tensor,

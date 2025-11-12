@@ -15,7 +15,6 @@ import lightning.pytorch.loggers as pl_loggers
 import lightning.pytorch.callbacks as pl_callbacks
 
 from advanced_data_mining.data import ds_loading
-
 from advanced_data_mining.model import rating_predictor
 
 
@@ -69,11 +68,11 @@ def main(cfg: omegaconf.DictConfig):
                     dirpath=os.path.join(run_path, 'checkpoints'),
                     monitor='val/cl_accuracy',
                     mode='max',
-                    save_top_k=2,
+                    save_top_k=1,
                     every_n_epochs=1),
                 pl_callbacks.EarlyStopping(
                     monitor='val/cl_accuracy', min_delta=0.0,
-                    patience=3,
+                    patience=7,
                     mode='max')],
             num_sanity_val_steps=0,
             enable_checkpointing=True,
@@ -85,6 +84,10 @@ def main(cfg: omegaconf.DictConfig):
 
         trainer.fit(model,
                     datamodule=data_module)
+
+        trainer.test(model,
+                     datamodule=data_module,
+                     ckpt_path='best')
 
 
 if __name__ == "__main__":
