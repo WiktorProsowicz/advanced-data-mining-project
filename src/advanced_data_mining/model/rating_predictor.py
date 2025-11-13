@@ -56,11 +56,13 @@ class RatingPredictor(pl.LightningModule):
         self._train_mae = torchmetrics.MeanAbsoluteError()
 
         self._val_metrics_cl = self._train_metrics_cl.clone(prefix='val/')
-        self._conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
-                                                      num_classes=5)
+        self._val_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
+                                                          num_classes=5)
         self._val_mae = torchmetrics.MeanAbsoluteError()
 
         self._test_metrics_cl = self._train_metrics_cl.clone(prefix='test/')
+        self._test_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
+                                                           num_classes=5)
         self._test_mae = torchmetrics.MeanAbsoluteError()
 
         self._reg_loss = torch.nn.MSELoss()
@@ -140,8 +142,8 @@ class RatingPredictor(pl.LightningModule):
         self._val_metrics_cl.update(classification_pred,
                                     batch['review_rating'].long() - 1)
 
-        self._conf_mat.update(classification_pred,
-                              batch['review_rating'].long() - 1)
+        self._val_conf_mat.update(classification_pred,
+                                  batch['review_rating'].long() - 1)
 
         self._val_mae.update(regression_pred, batch['review_rating'])
 
@@ -157,12 +159,13 @@ class RatingPredictor(pl.LightningModule):
             'val/classification_metrics', fig, self.current_epoch
         )
 
-        fig, _ = self._conf_mat.plot()
+        fig, _ = self._val_conf_mat.plot()
 
         tensorboard.add_figure(
             'val/confusion_matrix', fig, self.current_epoch
         )
 
+        self._val_conf_mat.reset()
         self._val_metrics_cl.reset()
         self._val_mae.reset()
 
@@ -181,12 +184,35 @@ class RatingPredictor(pl.LightningModule):
             'test/classification_cross_entropy': cl_loss
         }, on_epoch=True)
 
-        self._test_metrics_cl(classification_pred,
-                              batch['review_rating'].long() - 1)
-        self.log_dict(self._test_metrics_cl, on_epoch=True)
+        self._test_metrics_cl.update(classification_pred,
+                                     batch['review_rating'].long() - 1)
 
-        self._test_mae(regression_pred, batch['review_rating'])
-        self.log('test/regression_mae', self._test_mae, on_epoch=True)
+        self._test_mae.update(regression_pred, batch['review_rating'])
+
+        self._test_conf_mat.update(classification_pred,
+                                   batch['review_rating'].long() - 1)
+
+    def on_test_epoch_end(self):
+
+        tensorboard = self.loggers[1].experiment  # type: ignore
+
+        self.log_dict(self._test_metrics_cl.compute())
+        self.log('test/regression_mae', self._test_mae.compute())
+
+        fig, _ = self._test_metrics_cl.plot(together=True)
+        tensorboard.add_figure(
+            'test/classification_metrics', fig, self.current_epoch
+        )
+
+        fig, _ = self._test_conf_mat.plot()
+
+        tensorboard.add_figure(
+            'test/confusion_matrix', fig, self.current_epoch
+        )
+
+        self._test_conf_mat.reset()
+        self._test_metrics_cl.reset()
+        self._test_mae.reset()
 
     def _calc_losses(self,
                      reg_outputs: torch.Tensor,
