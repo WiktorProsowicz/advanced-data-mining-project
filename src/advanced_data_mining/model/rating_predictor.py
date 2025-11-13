@@ -45,7 +45,10 @@ class RatingPredictor(pl.LightningModule):
         self._optimizer_cfg = optimizer_cfg
 
         self._train_metrics_cl = torchmetrics.MetricCollection({
-            'cl_accuracy': torchmetrics.Accuracy(task='multiclass', num_classes=5),
+            'cl_accuracy_weighted': torchmetrics.Accuracy(task='multiclass', num_classes=5,
+                                                          average='weighted'),
+            'cl_accuracy_macro': torchmetrics.Accuracy(task='multiclass', num_classes=5,
+                                                       average='macro'),
             'cl_f1_score': torchmetrics.F1Score(task='multiclass', num_classes=5,
                                                 average='weighted'),
             'cl_recall': torchmetrics.Recall(task='multiclass', num_classes=5, average='weighted'),
