@@ -16,6 +16,7 @@ import lightning.pytorch.callbacks as pl_callbacks
 
 from advanced_data_mining.data import ds_loading
 from advanced_data_mining.model import rating_predictor
+from advanced_data_mining.utils import logging_utils
 
 
 def _logger():
@@ -25,9 +26,6 @@ def _logger():
 @hydra.main(version_base=None, config_path="cfg", config_name="train_model")
 def main(cfg: omegaconf.DictConfig):
     """Runs the model training pipeline."""
-
-    _logger().info('Running training with configuration:\n%s',
-                   omegaconf.OmegaConf.to_yaml(cfg))
 
     if cfg.train_cfg.seed is not None:
         pl.seed_everything(cfg.train_cfg.seed, workers=True)
@@ -48,6 +46,11 @@ def main(cfg: omegaconf.DictConfig):
 
         run_path = os.path.join('mlruns', experiment.experiment_id, run.info.run_id)
 
+        logging_utils.setup_logging('train_model', os.path.join(run_path, 'logs'))
+
+        _logger().info('Running training with configuration:\n%s',
+                       omegaconf.OmegaConf.to_yaml(cfg))
+
         trainer = pl.Trainer(
             accelerator='auto',
             devices='auto',
@@ -66,14 +69,14 @@ def main(cfg: omegaconf.DictConfig):
             callbacks=[
                 pl_callbacks.ModelCheckpoint(
                     dirpath=os.path.join(run_path, 'checkpoints'),
-                    monitor='val/cl_accuracy',
+                    monitor='val/cl_accuracy_weighted',
                     mode='max',
                     save_top_k=1,
                     every_n_epochs=1),
                 pl_callbacks.EarlyStopping(
-                    monitor='val/cl_accuracy', min_delta=0.0,
-                    patience=7,
-                    mode='max')],
+                    monitor='val/classification_cross_entropy', min_delta=0.0,
+                    patience=5,
+                    mode='min')],
             num_sanity_val_steps=0,
             enable_checkpointing=True,
             check_val_every_n_epoch=1,
