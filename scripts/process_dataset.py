@@ -158,9 +158,6 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
                               desc='Generating numerical features',
                               total=len(dataset)):
 
-        hashed_dir = misc.hash_restaurant_href(row['restaurant_href'])
-        os.makedirs(os.path.join(output_dir, 'bert_embeddings', str(hashed_dir)), exist_ok=True)
-
         embeddings = torch.load(os.path.join(output_dir,
                                              'word_bert_embeddings',
                                              misc.hash_restaurant_href(row['restaurant_href']),

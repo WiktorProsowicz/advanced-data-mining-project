@@ -83,6 +83,10 @@ class ProcessedDataset(torch.utils.data.Dataset):
                                        'tfidf_representations_full',
                                        restaurant_hash,
                                        f'{sample_idx}.pt')
+        sentence_bert_path = os.path.join(self._ds_path,
+                                          'sentence_bert_embeddings',
+                                          restaurant_hash,
+                                          f'{sample_idx}.pt')
 
         trace_cols = [col for col in self._numerical_features.columns
                       if col.startswith('trace_')]
@@ -110,6 +114,7 @@ class ProcessedDataset(torch.utils.data.Dataset):
             'tfidf_top': torch.load(tfidf_top_path).to_dense(),
             'bow_full': torch.load(bow_full_path).to_dense(),
             'tfidf_full': torch.load(tfidf_full_path).to_dense(),
+            'sentence_bert': torch.load(sentence_bert_path).to(torch.float32),
             'is_from_cracow': torch.tensor(num_features['is_from_cracow'],
                                            dtype=torch.float32).unsqueeze(-1),
             'num_words': torch.tensor(num_features['num_words'],

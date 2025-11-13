@@ -50,6 +50,10 @@ model_cfg:
       input_dim: 20000
       hidden_dims: [256, 64]
       dropout_rate: 0.1
+    sentence_bert:
+      input_dim: 1024
+      hidden_dims: [128, 64]
+      dropout_rate: 0.1
 
   numerical_feature_encoder:
     supported_features:
