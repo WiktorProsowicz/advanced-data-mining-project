@@ -22,7 +22,7 @@ class BOWEncoder(torch.nn.Module):
                 torch.nn.Sequential(
                     torch.nn.Linear(in_dim, out_dim),
                     torch.nn.ReLU(),
-                    torch.nn.LayerNorm(out_dim),
+                    torch.nn.BatchNorm1d(out_dim),
                     torch.nn.Dropout(dropout_rate)
                 ) for in_dim, out_dim in zip(
                     [input_dim] + hidden_dims[:-1], hidden_dims
@@ -56,7 +56,7 @@ class NumFeaturesEncoder(torch.nn.Module):
         )
 
         self._postnet = torch.nn.Sequential(
-            torch.nn.LayerNorm(hidden_dims[-1]),
+            torch.nn.BatchNorm1d(hidden_dims[-1]),
             torch.nn.Dropout(dropout_rate)
         )
 
@@ -81,7 +81,7 @@ class PostNet(torch.nn.Module):
                 torch.nn.Sequential(
                     torch.nn.Linear(in_dim, out_dim),
                     torch.nn.ReLU(),
-                    torch.nn.LayerNorm(out_dim),
+                    torch.nn.BatchNorm1d(out_dim),
                     torch.nn.Dropout(dropout_rate)
                 ) for in_dim, out_dim in zip(
                     [input_dim] + hidden_dims[:-1], hidden_dims

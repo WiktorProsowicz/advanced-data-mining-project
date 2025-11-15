@@ -75,8 +75,12 @@ def main(cfg: omegaconf.DictConfig):
                     every_n_epochs=1),
                 pl_callbacks.EarlyStopping(
                     monitor='val/classification_cross_entropy', min_delta=0.0,
-                    patience=5,
-                    mode='min')],
+                    patience=10,
+                    mode='min'),
+                pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.optimizer_cfg.lr,
+                                                       swa_epoch_start=1,
+                                                       annealing_epochs=3)
+            ],
             num_sanity_val_steps=0,
             enable_checkpointing=True,
             check_val_every_n_epoch=1,
