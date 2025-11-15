@@ -69,7 +69,7 @@ def main(cfg: omegaconf.DictConfig):
             callbacks=[
                 pl_callbacks.ModelCheckpoint(
                     dirpath=os.path.join(run_path, 'checkpoints'),
-                    monitor='val/cl_accuracy_weighted',
+                    monitor='val/cl_accuracy_weighted_fine',
                     mode='max',
                     save_top_k=1,
                     every_n_epochs=1),

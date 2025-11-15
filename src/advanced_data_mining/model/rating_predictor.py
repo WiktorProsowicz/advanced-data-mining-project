@@ -5,7 +5,6 @@ from typing import Any, Dict, Tuple
 import torch
 import lightning as pl
 import torchmetrics
-import matplotlib.pyplot as plt
 
 from advanced_data_mining.model import modules
 
@@ -32,41 +31,52 @@ class RatingPredictor(pl.LightningModule):
         self._num_features_encoder = None
         self._supported_num_features = []
 
-        if model_cfg.get('numerical_feature_encoder') is not None:
+        num_feat_enc_cfg = model_cfg['numerical_feature_encoder']
+        if num_feat_enc_cfg is not None:
             self._num_features_encoder = modules.NumFeaturesEncoder(
-                **model_cfg['numerical_feature_encoder']['params']
+                **num_feat_enc_cfg['params']
             )
 
-            self._supported_num_features = model_cfg['numerical_feature_encoder']['supported_features']
+            self._supported_num_features = num_feat_enc_cfg['supported_features']
 
         self._postnet = modules.PostNet(**model_cfg['post_net'])
 
         self._training_cfg = training_cfg
         self._optimizer_cfg = optimizer_cfg
 
-        self._train_metrics_cl = torchmetrics.MetricCollection({
-            'cl_accuracy_weighted': torchmetrics.Accuracy(task='multiclass', num_classes=5,
+        def train_metrics_cl(label, n_classes):
+            return torchmetrics.MetricCollection({
+                f'cl_accuracy_weighted_{label}': torchmetrics.Accuracy(task='multiclass',
+                                                                       num_classes=n_classes,
+                                                                       average='weighted'),
+                f'cl_accuracy_macro_{label}': torchmetrics.Accuracy(task='multiclass',
+                                                                    num_classes=n_classes,
+                                                                    average='macro'),
+                f'cl_f1_score_{label}': torchmetrics.F1Score(task='multiclass',
+                                                             num_classes=n_classes,
+                                                             average='weighted'),
+                f'cl_recall_{label}': torchmetrics.Recall(task='multiclass',
+                                                          num_classes=n_classes,
                                                           average='weighted'),
-            'cl_accuracy_macro': torchmetrics.Accuracy(task='multiclass', num_classes=5,
-                                                       average='macro'),
-            'cl_f1_score': torchmetrics.F1Score(task='multiclass', num_classes=5,
-                                                average='weighted'),
-            'cl_recall': torchmetrics.Recall(task='multiclass', num_classes=5, average='weighted'),
-            'cl_precision': torchmetrics.Precision(task='multiclass', num_classes=5,
-                                                   average='weighted'),
-        }, prefix='train/')
+                f'cl_precision_{label}': torchmetrics.Precision(task='multiclass',
+                                                                num_classes=n_classes,
+                                                                average='weighted')
+            }, prefix='train/')
 
+        self._train_metrics_cl = train_metrics_cl('fine', n_classes=5)
+        self._train_coarse_metrics_cl = train_metrics_cl('coarse', n_classes=3)
         self._train_mae = torchmetrics.MeanAbsoluteError()
+        self._train_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass', num_classes=5)
 
         self._val_metrics_cl = self._train_metrics_cl.clone(prefix='val/')
-        self._val_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
-                                                          num_classes=5)
+        self._val_coarse_metrics_cl = self._train_coarse_metrics_cl.clone(prefix='val/')
         self._val_mae = torchmetrics.MeanAbsoluteError()
+        self._val_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass', num_classes=5)
 
         self._test_metrics_cl = self._train_metrics_cl.clone(prefix='test/')
-        self._test_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
-                                                           num_classes=5)
+        self._test_coarse_metrics_cl = self._train_coarse_metrics_cl.clone(prefix='test/')
         self._test_mae = torchmetrics.MeanAbsoluteError()
+        self._test_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass', num_classes=5)
 
         self._reg_loss = torch.nn.MSELoss()
         self._cl_loss = torch.nn.CrossEntropyLoss(weight=torch.tensor(
@@ -125,7 +135,33 @@ class RatingPredictor(pl.LightningModule):
         self._train_mae(regression_pred, batch['review_rating'])
         self.log('train/regression_mae', self._train_mae, on_step=True)
 
+        self._train_conf_mat.update(classification_pred,
+                                    batch['review_rating'].long() - 1)
+
+        coarse_preds, coarse_labels = self._fine_to_coarse(classification_pred,
+                                                           batch['review_rating'].long() - 1)
+
+        self._train_coarse_metrics_cl(coarse_preds, coarse_labels)
+        self.log_dict(self._train_coarse_metrics_cl, on_step=True)
+
         return total_loss
+
+    def on_train_epoch_end(self):
+
+        tensorboard = self.loggers[1].experiment  # type: ignore
+
+        fig, _ = self._train_metrics_cl.plot(together=True)
+        tensorboard.add_figure(
+            'train/classification_metrics', fig, self.current_epoch
+        )
+
+        fig, _ = self._train_conf_mat.plot()
+
+        tensorboard.add_figure(
+            'train/confusion_matrix', fig, self.current_epoch
+        )
+
+        self._train_conf_mat.reset()
 
     def validation_step(self,  # pylint: disable=arguments-differ
                         batch: Dict[str, torch.Tensor]) -> None:
@@ -144,11 +180,14 @@ class RatingPredictor(pl.LightningModule):
 
         self._val_metrics_cl.update(classification_pred,
                                     batch['review_rating'].long() - 1)
-
         self._val_conf_mat.update(classification_pred,
                                   batch['review_rating'].long() - 1)
-
         self._val_mae.update(regression_pred, batch['review_rating'])
+
+        coarse_preds, coarse_labels = self._fine_to_coarse(classification_pred,
+                                                           batch['review_rating'].long() - 1)
+
+        self._val_coarse_metrics_cl.update(coarse_preds, coarse_labels)
 
     def on_validation_epoch_end(self):
 
@@ -156,6 +195,7 @@ class RatingPredictor(pl.LightningModule):
 
         self.log_dict(self._val_metrics_cl.compute())
         self.log('val/regression_mae', self._val_mae.compute())
+        self.log_dict(self._val_coarse_metrics_cl.compute())
 
         fig, _ = self._val_metrics_cl.plot(together=True)
         tensorboard.add_figure(
@@ -190,10 +230,14 @@ class RatingPredictor(pl.LightningModule):
         self._test_metrics_cl.update(classification_pred,
                                      batch['review_rating'].long() - 1)
 
-        self._test_mae.update(regression_pred, batch['review_rating'])
-
         self._test_conf_mat.update(classification_pred,
                                    batch['review_rating'].long() - 1)
+        self._test_mae.update(regression_pred, batch['review_rating'])
+
+        coarse_preds, coarse_labels = self._fine_to_coarse(classification_pred,
+                                                           batch['review_rating'].long() - 1)
+
+        self._test_coarse_metrics_cl.update(coarse_preds, coarse_labels)
 
     def on_test_epoch_end(self):
 
@@ -201,6 +245,7 @@ class RatingPredictor(pl.LightningModule):
 
         self.log_dict(self._test_metrics_cl.compute())
         self.log('test/regression_mae', self._test_mae.compute())
+        self.log_dict(self._test_coarse_metrics_cl.compute())
 
         fig, _ = self._test_metrics_cl.plot(together=True)
         tensorboard.add_figure(
@@ -234,3 +279,21 @@ class RatingPredictor(pl.LightningModule):
         )
 
         return total_loss, loss_fn_regression, loss_fn_classification
+
+    @torch.no_grad()
+    def _fine_to_coarse(self, fine_logits: torch.Tensor, fine_labels: torch.Tensor) -> torch.Tensor:
+        """Converts fine-grained 5-class logits to coarse-grained 3-class labels."""
+
+        fine_predictions = torch.argmax(fine_logits, dim=-1)
+
+        coarse_preds = torch.zeros_like(fine_predictions)
+        coarse_preds[fine_predictions <= 1] = 0
+        coarse_preds[(fine_predictions == 2)] = 1
+        coarse_preds[fine_predictions >= 3] = 2
+
+        coarse_labels = torch.zeros_like(fine_labels)
+        coarse_labels[fine_labels <= 1] = 0
+        coarse_labels[(fine_labels == 2)] = 1
+        coarse_labels[fine_labels >= 3] = 2
+
+        return coarse_preds, coarse_labels
