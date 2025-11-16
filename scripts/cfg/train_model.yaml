@@ -11,10 +11,11 @@ data_cfg:
 
 train_cfg:
   seed: 2137
-  max_epochs: 50
+  max_epochs: 15
   classification_classes_weights: [6.0, 15.0, 15.0, 10.0, 1.5]
   reg_loss_weight: 0.3
   cl_loss_weight: 1.0
+  early_stopping_patience: 3
 
 optimizer_cfg:
   lr: 0.001
