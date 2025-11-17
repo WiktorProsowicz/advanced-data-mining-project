@@ -15,9 +15,9 @@ def hash_restaurant_href(restaurant_href: str) -> str:
 
 @dataclasses.dataclass(unsafe_hash=True)
 class MLRun:
+    """Represents an MLflow run."""
     experiment_name: str
     run_name: str
-    run_id: str
     path: str
 
 
@@ -36,6 +36,5 @@ def get_mlruns(experiment_name: str):
 
     return [MLRun(experiment_name=experiment_name,
                   run_name=run.info.run_name,
-                  run_id=run.info.run_id,
                   path=os.path.join('mlruns', experiment.experiment_id, run.info.run_id))
             for run in runs]

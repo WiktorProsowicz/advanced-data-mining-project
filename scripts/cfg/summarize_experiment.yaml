@@ -1,12 +1,48 @@
 experiment_name: choosing_bow_encoder
-sort_by_metric: cl_accuracy
 metrics_for_plot_axes:
-  - [cl_precision, cl_recall]
+  - [cl_precision_coarse, cl_recall_coarse]
+  - [cl_precision_fine, cl_recall_fine]
+  - [cl_accuracy_weighted_fine, regression_mae]
+  - [cl_f1_score_coarse, classification_cross_entropy]
   - [regression_mae, classification_cross_entropy]
-summary_table_metrics:
-  - cl_accuracy
-  - cl_precision
-  - cl_recall
-  - regression_mae
-  - classification_cross_entropy
+summary_tables:
+  - name: full
+    metrics:
+    - cl_accuracy_macro_coarse
+    - cl_accuracy_macro_fine
+    - cl_accuracy_weighted_coarse
+    - cl_accuracy_weighted_fine
+    - cl_f1_score_coarse
+    - cl_f1_score_fine
+    - cl_precision_coarse
+    - cl_precision_fine
+    - cl_recall_coarse
+    - cl_recall_fine
+    - classification_cross_entropy
+    - regression_mae
+    - regression_mse
+    sort_by: cl_accuracy_weighted_fine
+  - name: fine
+    metrics:
+    - cl_accuracy_weighted_fine
+    - cl_accuracy_macro_fine
+    - cl_f1_score_fine
+    - cl_precision_fine
+    - cl_recall_fine
+    sort_by: cl_accuracy_weighted_fine
+  - name: coarse
+    metrics:
+    - cl_accuracy_weighted_coarse
+    - cl_accuracy_macro_coarse
+    - cl_f1_score_coarse
+    - cl_precision_coarse
+    - cl_recall_coarse
+    sort_by: cl_accuracy_weighted_coarse
+  - name: losses
+    metrics:
+    - classification_cross_entropy
+    - regression_mae
+    - regression_mse
+    sort_by: classification_cross_entropy
+  
 output_path: tmp/exp_summary_choosing_bow_encoder

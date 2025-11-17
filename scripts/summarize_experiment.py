@@ -37,7 +37,7 @@ def main(cfg: omegaconf.DictConfig):
 
         plot_path = os.path.join(
             cfg.output_path,
-            f'scatter_{x_metric}_vs_{y_metric}.png'
+            f'scatter_{x_metric}_vs_{y_metric}.svg'
         )
 
         fig.savefig(plot_path)
@@ -45,16 +45,28 @@ def main(cfg: omegaconf.DictConfig):
         _logger().info('Saved scatter plot of %s vs %s to %s',
                        y_metric, x_metric, plot_path)
 
-    summary_table = experiments_summary.compose_summary_table(
-        mlflow_runs=mlflow_runs,
-        metrics=cfg.summary_table_metrics
-    )
+    for table in cfg.summary_tables:
+        summary_table = experiments_summary.compose_summary_table(
+            mlflow_runs=mlflow_runs,
+            metrics=table.metrics,
+            sort_by=table.sort_by
+        )
 
-    summary_path = os.path.join(cfg.output_path, 'summary_table.md')
-    with open(summary_path, 'w') as f:
-        f.write(summary_table)
+        summary_path = os.path.join(
+            cfg.output_path,
+            f'summary_table_{table.name}.md'
+        )
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            f.write(summary_table)
 
-    _logger().info('Saved summary table to %s', summary_path)
+        _logger().info('Saved summary table to %s', summary_path)
+
+    _logger().info('Generating summary figures...')
+
+    for fig_name, fig in experiments_summary.get_summary_figures(mlflow_runs).items():
+        fig_path = os.path.join(cfg.output_path, 'summary_figures', f'{fig_name}.svg')
+        os.makedirs(os.path.dirname(fig_path), exist_ok=True)
+        fig.savefig(fig_path)
 
 
 if __name__ == '__main__':
