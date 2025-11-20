@@ -1,6 +1,6 @@
 """Contains utilities for summarizing MLflow experiments."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 import sys
 import logging
 import os
@@ -25,7 +25,7 @@ def extract_test_metrics(mlflow_run: misc_utils.MLRun) -> Dict[str, float]:
     metrics_path = misc_utils.os.path.join(mlflow_run.path, 'metrics', 'test')
 
     for metric_file in misc_utils.os.listdir(metrics_path):
-        with open(misc_utils.os.path.join(metrics_path, metric_file), 'r') as f:
+        with open(misc_utils.os.path.join(metrics_path, metric_file), 'r', encoding='utf-8') as f:
             _, value, _ = f.readline().strip().split(' ')
 
         metrics[metric_file] = float(value)
@@ -38,7 +38,7 @@ def plot_metric_pair(mlflow_runs: list[misc_utils.MLRun],
                      y_metric: str) -> plt.Figure:
     """Creates a scatter plot for two given metrics across multiple MLflow runs."""
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 12))
 
     runs_metrics = {
         run: extract_test_metrics(run) for run in mlflow_runs
@@ -69,6 +69,8 @@ def plot_metric_pair(mlflow_runs: list[misc_utils.MLRun],
     ax.set_ylabel(y_metric)
     ax.set_title(f'Scatter Plot of {y_metric} vs {x_metric}')
     ax.legend()
+
+    plt.close(fig)
 
     return fig
 
@@ -168,6 +170,7 @@ def _get_metric_distributions_figures(
     lr_groups = collections.defaultdict(list)
     postnet_hidden_dims_groups = collections.defaultdict(list)
     numerical_features_groups = collections.defaultdict(list)
+    trace_features_groups = collections.defaultdict(list)
 
     for run in runs_metrics:
 
@@ -181,8 +184,19 @@ def _get_metric_distributions_figures(
         post_net_hidden_dims = tuple(basic_info['post_net_hidden_dims'])
         postnet_hidden_dims_groups[post_net_hidden_dims].append(run)
 
-        numerical_features = tuple(sorted(basic_info['numerical_features_used']))
+        valid_num_features = ['num_words', 'num_sentences', 'is_from_cracow']
+
+        numerical_features = tuple(sorted({
+            feat for feat in basic_info['numerical_features_used']
+            if feat in valid_num_features
+        }))
         numerical_features_groups[numerical_features].append(run)
+
+        trace_features = tuple(sorted({
+            feat for feat in basic_info['numerical_features_used']
+            if feat not in numerical_features
+        }))
+        trace_features_groups[trace_features].append(run)
 
     figures.update(_get_metric_distributions_by_groups(
         runs_metrics=runs_metrics,
@@ -206,6 +220,12 @@ def _get_metric_distributions_figures(
         runs_metrics=runs_metrics,
         groups={', '.join(k): v for k, v in numerical_features_groups.items()},
         label='distributions_by_numerical_features'
+    ))
+
+    figures.update(_get_metric_distributions_by_groups(
+        runs_metrics=runs_metrics,
+        groups={', '.join(k): v for k, v in trace_features_groups.items()},
+        label='distributions_by_trace_features'
     ))
 
     return figures
@@ -232,12 +252,17 @@ def _get_metric_distributions_by_groups(
         values = {bow_group: [runs_metrics[run][metric] for run in runs]
                   for bow_group, runs in groups.items()}
 
-        ax.violinplot(list(values.values()), showmeans=True)
+        plot_parts = ax.violinplot(list(values.values()), showmeans=True,
+                                   showmedians=False, quantiles=[[.25, .75]] * len(groups))
+
+        plot_parts['cquantiles'].set_color('red')
+
         ax.set_xticks(np.arange(1, len(values) + 1))
         ax.set_xticklabels(list(values.keys()), rotation=45, ha='right')
         ax.grid(axis='y')
 
         fig.tight_layout()
+        plt.close(fig)
 
         figures[f'{label}/{metric}'] = fig
 
