@@ -105,10 +105,10 @@ class TextPreprocessor:
 
             with torch.no_grad():
                 outputs = model(**inputs)
-                word_embeddings.append(outputs.last_hidden_state.squeeze(0)[1:-1].clone())
-                sentence_embeddings.append(outputs.pooler_output.squeeze(0)[0].clone())
+                word_embeddings.append(outputs.last_hidden_state.squeeze(0)[1:-1].cpu().clone())
+                sentence_embeddings.append(outputs.last_hidden_state.squeeze(0)[0].cpu().clone())
 
-        return word_embeddings, sentence_embeddings
+        return word_embeddings, torch.mean(torch.stack(sentence_embeddings), dim=0)
 
     def calc_trace_velocity(self,
                             sentence_embeddings: List[torch.Tensor],
@@ -162,8 +162,8 @@ class TextPreprocessor:
         device = torch.device(self._bert_model_device)
 
         if self._bert_tokenizer is None or self._bert_model is None:
-            self._bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-            self._bert_model = BertModel.from_pretrained('bert-base-uncased').to(device)
+            self._bert_tokenizer = BertTokenizer.from_pretrained('bert-large-cased')
+            self._bert_model = BertModel.from_pretrained('bert-large-cased').to(device)
 
         return self._bert_tokenizer, self._bert_model
 

@@ -13,7 +13,6 @@ import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 import torch
 
-from advanced_data_mining.data import text_processing
 from advanced_data_mining.utils import misc
 
 
@@ -54,7 +53,7 @@ class EDAFeatureExtractor:
                                          col,  # pylint: disable=cell-var-from-loop
                                          misc.hash_restaurant_href(
                                              self._ds.at[idx, 'restaurant_href']),
-                                         f"{idx}.pt")
+                                         f'{idx}.pt')
             )
 
             self._paths_df = pd.concat([self._paths_df, paths_series.rename(col)], axis=1)
@@ -124,6 +123,20 @@ class EDAFeatureExtractor:
 
         stats['bbow_stats'] = bbow_stats
 
+        traslation_stats: Dict[str, Any] = {}
+
+        traslation_stats['n_reviews_translated'] = int(
+            len(self._ds[self._ds['is_translated']]))
+
+        translated_percentages = self._ds.groupby('review_rating')['is_translated'].mean()
+
+        for rating in range(1, 6):
+            traslation_stats[f'rating_{rating}_translated_percentage'] = float(
+                translated_percentages[rating]
+            )
+
+        stats['translation_stats'] = traslation_stats
+
         return stats
 
     def get_figures(self) -> Dict[str, plt.Figure]:
@@ -162,11 +175,14 @@ class EDAFeatureExtractor:
             self._bow_nzero_df['bottom'] >= 0
         ].sample(n=5)
 
+        full_bbow_with_zero_elements = self._ds[self._bow_nzero_df['full'] == 0].sample(n=15)
+
         return {
             'sentence_outliers': sentence_outliers.to_dict(orient='records'),
             'word_outliers': word_outliers.to_dict(orient='records'),
             'containing_most_frequent': containing_most_frequent.to_dict(orient='records'),
             'containing_least_frequent': containing_least_frequent.to_dict(orient='records'),
+            'full_bbow_with_zero_elements': full_bbow_with_zero_elements.to_dict(orient='records')
         }
 
     def _get_length_clustering_figures(self) -> Dict[str, plt.Figure]:
@@ -209,17 +225,7 @@ class EDAFeatureExtractor:
 
         figures: Dict[str, plt.Figure] = {}
 
-        fig, ax = plt.subplots()
-
-        ax.hist(self._ds['review_rating'], bins=5, range=(1, 6),
-                align='left', rwidth=0.8,
-                weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
-        ax.set_title('Distribution of Review Ratings')
-        ax.set_xlabel('Review Rating')
-        ax.set_ylabel('Percentage of Reviews')
-        ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
-
-        figures['review_rating_distribution'] = fig
+        figures['review_rating_distribution'] = self._get_rating_distribution_figure()
 
         threshold = self._numerical_stats['num_words'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_words'] < threshold]
@@ -262,6 +268,48 @@ class EDAFeatureExtractor:
 
         return figures
 
+    def _get_rating_distribution_figure(self) -> plt.Figure:
+        """Generates review rating distribution figures."""
+
+        fig, axes = plt.subplots(3, figsize=(8, 18))
+
+        axes[0].hist(
+            self._ds['review_rating'], bins=5, range=(1, 6),
+            align='left', rwidth=0.8,
+            weights=np.ones(len(self._ds['review_rating'])) / len(self._ds['review_rating']))
+        axes[0].set_title('Distribution of Review Ratings')
+
+        dist_translated = self._ds[self._ds['is_translated']].groupby('review_rating').size()
+        dist_not_translated = self._ds[~self._ds['is_translated']].groupby('review_rating').size()
+        dist_translated /= dist_translated.sum()
+        dist_not_translated /= dist_not_translated.sum()
+
+        axes[1].bar(dist_translated.index, dist_translated.values,
+                    label='Translated', width=0.2)
+        axes[1].bar(dist_not_translated.index + .2, dist_not_translated.values,
+                    label='Not Translated', width=0.2)
+        axes[1].set_title('Distribution of Review Ratings (Translated vs Not Translated)')
+        axes[1].legend()
+
+        dist_cracow = self._ds[self._ds['is_from_cracow']].groupby('review_rating').size()
+        dist_warsaw = self._ds[~self._ds['is_from_cracow']].groupby('review_rating').size()
+        dist_cracow /= dist_cracow.sum()
+        dist_warsaw /= dist_warsaw.sum()
+
+        axes[2].bar(dist_cracow.index, dist_cracow.values,
+                    label='From Cracow', width=0.2)
+        axes[2].bar(dist_warsaw.index + .2, dist_warsaw.values,
+                    label='From Warsaw', width=0.2)
+        axes[2].set_title('Distribution of Review Ratings (Cracow vs Warsaw)')
+        axes[2].legend()
+
+        for ax in axes:
+            ax.set_xlabel('Review Rating')
+            ax.set_ylabel('Percentage of Reviews')
+            ax.yaxis.set_major_formatter(plticker.PercentFormatter(1))
+
+        return fig
+
     def _get_velocity_volume_figures(self) -> Dict[str, plt.Figure]:
         """Generates velocity and volume clustering figures for EDA."""
 
@@ -269,14 +317,19 @@ class EDAFeatureExtractor:
 
         chunk_infos = self._get_vol_vel_chunk_infos()
 
-        fig, axes = plt.subplots(len(chunk_infos), 2, figsize=(12, 6 * len(chunk_infos)))
+        fig, axes = plt.subplots(len(chunk_infos), 3, figsize=(12, 6 * len(chunk_infos)))
 
         for i, (chunk_length, chunk_size) in enumerate(chunk_infos):
 
             vel_col = f'trace_velocity_cl_{chunk_length}_sz_{chunk_size}'
             vol_col = f'trace_volume_cl_{chunk_length}_sz_{chunk_size}'
 
-            chosen_reviews = self._numerical_stats[self._numerical_stats[vel_col] > 0]
+            chosen_reviews = pd.concat([self._numerical_stats[vel_col],
+                                        self._numerical_stats[vol_col],
+                                        self._numerical_stats['review_rating'],
+                                        self._numerical_stats['is_from_cracow'],
+                                        self._ds['is_translated']], axis=1)
+            chosen_reviews = chosen_reviews[chosen_reviews[vel_col] > 0]
             chosen_reviews = chosen_reviews[chosen_reviews[vol_col] > 0]
             chosen_reviews = chosen_reviews.sample(n=min(1000, len(chosen_reviews)))
 
@@ -288,7 +341,7 @@ class EDAFeatureExtractor:
                     label=f'Rating {rating}'
                 )
 
-            axes[i, 0].set_title(f'Clustering of Velocity vs Volume (Chunk Length: {chunk_length})')
+            axes[i, 0].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
             axes[i, 0].set_xlabel('Trace Velocity')
             axes[i, 0].set_ylabel('Trace Volume')
             axes[i, 0].legend()
@@ -299,10 +352,21 @@ class EDAFeatureExtractor:
             axes[i, 1].scatter(chosen_reviews[vel_col][~chosen_reviews['is_from_cracow']],
                                chosen_reviews[vol_col][~chosen_reviews['is_from_cracow']],
                                alpha=0.5, label='From Warsaw')
-            axes[i, 1].set_title(f'Velocity vs Volume (CL: {chunk_length}, SZ={chunk_size})')
+            axes[i, 1].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
             axes[i, 1].set_xlabel('Trace Velocity')
             axes[i, 1].set_ylabel('Trace Volume')
             axes[i, 1].legend()
+
+            axes[i, 2].scatter(chosen_reviews[vel_col][chosen_reviews['is_translated']],
+                               chosen_reviews[vol_col][chosen_reviews['is_translated']],
+                               alpha=0.5, label='Translated')
+            axes[i, 2].scatter(chosen_reviews[vel_col][~chosen_reviews['is_translated']],
+                               chosen_reviews[vol_col][~chosen_reviews['is_translated']],
+                               alpha=0.5, label='Not Translated')
+            axes[i, 2].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
+            axes[i, 2].set_xlabel('Trace Velocity')
+            axes[i, 2].set_ylabel('Trace Volume')
+            axes[i, 2].legend()
 
         figures['clustering_velocity_volume'] = fig
 

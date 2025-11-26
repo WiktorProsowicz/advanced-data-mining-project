@@ -21,7 +21,9 @@
 				"ms-python.autopep8",
 				"ms-python.pylint",
 				"skellock.just",
-				"matangover.mypy"
+				"matangover.mypy",
+				"ms-toolsai.tensorboard",
+				"ms-toolsai.jupyter"
 			]
 		}
 	},
@@ -37,6 +39,8 @@
 	// Configure tool-specific properties.
 	// "customizations": {},
 	"runArgs": [
-		"--gpus", "all"
+		"--gpus", "all",
+		"--shm-size",
+		"512m"
 	]
 }
