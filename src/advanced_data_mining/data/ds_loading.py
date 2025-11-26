@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Contains definition preprocessed dataset loader."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import os
 import logging
 import sys
@@ -41,6 +41,12 @@ class ProcessedDataset(torch.utils.data.Dataset):
 
     def __len__(self) -> int:
         return len(self._sample_indices)
+
+    def get_raw_sample(self, idx: int) -> Dict[str, Any]:
+        """Returns unprocessed data for a given sample."""
+
+        sample_idx = self._sample_indices[idx]
+        return self._preprocessed_ds.iloc[sample_idx]
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
 

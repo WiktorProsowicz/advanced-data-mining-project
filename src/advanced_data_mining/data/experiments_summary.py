@@ -1,6 +1,6 @@
 """Contains utilities for summarizing MLflow experiments."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 import sys
 import logging
 import os
@@ -116,6 +116,20 @@ def extract_basic_info(mlflow_run: misc_utils.MLRun) -> Dict[str, Any]:
     return info
 
 
+def get_best_checkpoint_path(run: misc_utils.MLRun) -> str:
+    """Returns path to checkpoint corresponding with the best metric."""
+
+    basic_info = extract_basic_info(run)
+
+    for epoch_file in os.listdir(os.path.join(run.path, 'checkpoints')):
+
+        if epoch_file.startswith(f'epoch={basic_info["best_epoch"]}-'):
+            return os.path.join(run.path, 'checkpoints', epoch_file)
+
+    _logger().critical('Failed to obtain best checkpoint path!')
+    sys.exit(1)
+
+
 def compose_summary_table(mlflow_runs: list[misc_utils.MLRun],
                           metrics: list[str],
                           sort_by: str) -> str:
@@ -159,6 +173,20 @@ def get_summary_figures(mlflow_runs: list[misc_utils.MLRun]) -> Dict[str, plt.Fi
     figures.update(_get_metric_distributions_figures(runs_metrics))
 
     return figures
+
+
+def get_best_and_worst_runs(mlflow_runs: list[misc_utils.MLRun],
+                            metric: str) -> Tuple[misc_utils.MLRun, misc_utils.MLRun]:
+    """Returns best and worst runs with respect to a given metric."""
+
+    runs_metrics = {run: extract_test_metrics(run) for run in mlflow_runs}
+
+    if not runs_metrics:
+        _logger().critical('Cannot get best and worst run from an empty sequence!')
+        sys.exit(1)
+
+    return (max(mlflow_runs, key=lambda run: runs_metrics[run][metric]),
+            min(mlflow_runs, key=lambda run: runs_metrics[run][metric]))
 
 
 def _get_metric_distributions_figures(

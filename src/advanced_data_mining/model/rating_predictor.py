@@ -262,6 +262,16 @@ class RatingPredictor(pl.LightningModule):
         self._test_metrics_cl.reset()
         self._test_mae.reset()
 
+    def sanitize_outputs(self, reg_outputs: torch.Tensor, cl_outputs: torch.Tensor):
+        """Converts raw batched model outputs into rating predictions."""
+
+        reg_possible_values = torch.tensor([1, 2, 3, 4, 5])
+
+        bucket_indices = torch.bucketize(reg_outputs, reg_possible_values) - 1
+        reg_sanitized_out = reg_possible_values[bucket_indices]
+
+        return torch.argmax(cl_outputs, -1), reg_sanitized_out
+
     def _calc_losses(self,
                      reg_outputs: torch.Tensor,
                      cl_outputs: torch.Tensor,
