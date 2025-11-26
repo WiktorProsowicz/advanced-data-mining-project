@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Script to scrape Google Maps reviews for locations matching specified queries."""
 from __future__ import annotations
 

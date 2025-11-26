@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """Contains miscellaneous utility functions."""
-import os
-import hashlib
 import dataclasses
+import hashlib
+import os
 
 import mlflow
 

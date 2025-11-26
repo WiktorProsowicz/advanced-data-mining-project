@@ -1,9 +1,10 @@
 """Contains definition of Rating Predictor model."""
+from typing import Any
+from typing import Dict
+from typing import Tuple
 
-from typing import Any, Dict, Tuple
-
-import torch
 import lightning as pl
+import torch
 import torchmetrics
 
 from advanced_data_mining.model import modules
@@ -291,7 +292,9 @@ class RatingPredictor(pl.LightningModule):
         return total_loss, loss_fn_regression, loss_fn_classification
 
     @torch.no_grad()
-    def _fine_to_coarse(self, fine_logits: torch.Tensor, fine_labels: torch.Tensor) -> torch.Tensor:
+    def _fine_to_coarse(self,
+                        fine_logits: torch.Tensor,
+                        fine_labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Converts fine-grained 5-class logits to coarse-grained 3-class labels."""
 
         fine_predictions = torch.argmax(fine_logits, dim=-1)

@@ -1,6 +1,7 @@
+---
 run_cfg:
-  mlflow_experiment: "rating_predictor"
-  mlflow_run: "sample_run"
+  mlflow_experiment: rating_predictor
+  mlflow_run: sample_run
 
 data_cfg:
   ds_path: tmp/processed_ds_v0.2

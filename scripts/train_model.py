@@ -3,16 +3,15 @@
 The script config defines the input features used by the model, its architecture,
 and the training hyperparameters. The pipeline has its associated MLFlow run.
 """
-
-import os
 import logging
+import os
 
-import omegaconf
 import hydra
-import mlflow
 import lightning as pl
-import lightning.pytorch.loggers as pl_loggers
 import lightning.pytorch.callbacks as pl_callbacks
+import lightning.pytorch.loggers as pl_loggers
+import mlflow
+import omegaconf
 
 from advanced_data_mining.data import ds_loading
 from advanced_data_mining.model import rating_predictor
@@ -23,7 +22,7 @@ def _logger():
     return logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="cfg", config_name="train_model")
+@hydra.main(version_base=None, config_path='cfg', config_name='train_model')
 def main(cfg: omegaconf.DictConfig):
     """Runs the model training pipeline."""
 
@@ -97,5 +96,5 @@ def main(cfg: omegaconf.DictConfig):
                      ckpt_path='best')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()  # pylint: disable=no-value-for-parameter

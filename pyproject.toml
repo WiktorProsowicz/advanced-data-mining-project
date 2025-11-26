@@ -25,3 +25,22 @@ dev = [
     "ipykernel>=7.0.1",
     "pre-commit>=4.3.0"
 ]
+
+[tool.pylint."messages control"]
+disable = [
+    "fixme",
+    "too-few-public-methods",
+    "too-many-instance-attributes",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "R0801"
+]
+ignore = "*torchkan.py"
+
+
+[tool.autopep8]
+aggressive = true
+max-line-length = 100
+in-place = true
+exclude = "*torchkan.py"

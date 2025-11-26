@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Contains definitions of raw dataset structures and utilities for loading/saving them."""
 import dataclasses
 import json
@@ -52,7 +51,7 @@ class RawDSLoader:
             else:
                 city = 'Warsaw'
 
-            with open(os.path.join(self._raw_ds_path, json_file), 'r', encoding='utf-8') as f:
+            with open(os.path.join(self._raw_ds_path, json_file), encoding='utf-8') as f:
                 data = json.load(f)
 
             location = Restaurant(

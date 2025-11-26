@@ -1,21 +1,22 @@
 """Runs testing on models corresponding to a given experiment and composes stats summary."""
-
-import os
-import logging
 import itertools
-from typing import Dict, Any, List
 import json
+import logging
+import os
+from typing import Any
+from typing import Dict
+from typing import List
 
 import hydra
-import omegaconf
 import lightning.pytorch as pl
+import omegaconf
 import torch
 
-from advanced_data_mining.utils import logging_utils
-from advanced_data_mining.data import experiments_summary
-from advanced_data_mining.utils import misc as misc_utils
 from advanced_data_mining.data import ds_loading
+from advanced_data_mining.data import experiments_summary
 from advanced_data_mining.model import rating_predictor
+from advanced_data_mining.utils import logging_utils
+from advanced_data_mining.utils import misc as misc_utils
 
 
 def _logger():
@@ -51,7 +52,7 @@ def _save_example_outputs(run: misc_utils.MLRun,
         json.dump(examples, output_json_f, indent=4, ensure_ascii=False)
 
 
-@hydra.main(version_base=None, config_path="cfg", config_name="summarize_experiment")
+@hydra.main(version_base=None, config_path='cfg', config_name='summarize_experiment')
 def main(cfg: omegaconf.DictConfig):
     """Runs testing and summarizes results for a given experiment."""
 

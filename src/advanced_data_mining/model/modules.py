@@ -1,6 +1,6 @@
 """Contains layers and modules for building models."""
-
-from typing import List, Tuple
+from typing import List
+from typing import Tuple
 
 import torch
 

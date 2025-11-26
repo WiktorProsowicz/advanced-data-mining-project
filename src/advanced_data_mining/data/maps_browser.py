@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Google Maps reviews scraping engine."""
 from __future__ import annotations
 

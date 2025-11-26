@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Contains utilities for text processing, normalization and obtaining embeddings."""
 import collections
 import dataclasses
@@ -90,7 +89,7 @@ class TextPreprocessor:
         sentences = [sentence.text_with_ws for sentence in gruut.sentences(text, phonemes=False)]
         return ' '.join(sentences)
 
-    def get_bert_embeddings(self, text: str) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+    def get_bert_embeddings(self, text: str) -> Tuple[List[torch.Tensor], torch.Tensor]:
         """Generates word-level and sentence-level embeddings for the given text's sentences."""
 
         word_embeddings: List[torch.Tensor] = []
@@ -224,7 +223,7 @@ class TextPreprocessor:
     def load_pos_vocab_from_file(self, filepath: str):
         """Loads POS vocabulary from a file."""
         self._pos_vocab.clear()
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             for line in f:
                 pos = line.strip()
                 self._pos_vocab.add(pos)
@@ -281,7 +280,7 @@ class TextPreprocessor:
         self._vocabulary.sorted_words.clear()
         self._vocabulary.n_docs = 0
 
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             lines = f.readlines()
 
             self._vocabulary.n_docs = int(lines[0].strip())

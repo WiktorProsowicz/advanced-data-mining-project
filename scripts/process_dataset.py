@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Transforms raw dataset into a processed format suitable for model training.
 
 The script performs the following steps:

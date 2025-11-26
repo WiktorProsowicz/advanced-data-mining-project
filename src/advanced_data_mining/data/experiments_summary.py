@@ -1,14 +1,16 @@
 """Contains utilities for summarizing MLflow experiments."""
-
-from typing import Any, Dict, List, Tuple
-import sys
+import ast
+import collections
 import logging
 import os
-import collections
-import ast
+import sys
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Tuple
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from advanced_data_mining.utils import misc as misc_utils
 
@@ -25,7 +27,7 @@ def extract_test_metrics(mlflow_run: misc_utils.MLRun) -> Dict[str, float]:
     metrics_path = misc_utils.os.path.join(mlflow_run.path, 'metrics', 'test')
 
     for metric_file in misc_utils.os.listdir(metrics_path):
-        with open(misc_utils.os.path.join(metrics_path, metric_file), 'r', encoding='utf-8') as f:
+        with open(misc_utils.os.path.join(metrics_path, metric_file), encoding='utf-8') as f:
             _, value, _ = f.readline().strip().split(' ')
 
         metrics[metric_file] = float(value)
@@ -81,7 +83,7 @@ def extract_basic_info(mlflow_run: misc_utils.MLRun) -> Dict[str, Any]:
     info: Dict[str, Any] = {}
 
     cpt_metric_path = os.path.join(mlflow_run.path, 'metrics', 'val', 'cl_accuracy_weighted_fine')
-    with open(cpt_metric_path, 'r', encoding='utf-8') as f:
+    with open(cpt_metric_path, encoding='utf-8') as f:
         accuracies = [float(value) for _, value, _ in
                       (line.strip().split(' ') for line in f.readlines())]
 
@@ -95,18 +97,18 @@ def extract_basic_info(mlflow_run: misc_utils.MLRun) -> Dict[str, Any]:
                                                         'params', 'model_cfg', 'bow_encoders'))
 
     opt_cfg_path = os.path.join(mlflow_run.path, 'params', 'optimizer_cfg', 'lr')
-    with open(opt_cfg_path, 'r', encoding='utf-8') as f:
+    with open(opt_cfg_path, encoding='utf-8') as f:
         info['learning_rate'] = float(f.readline().strip())
 
     model_cfg_path = os.path.join(mlflow_run.path, 'params', 'model_cfg')
-    with open(os.path.join(model_cfg_path, 'post_net', 'hidden_dims'), 'r', encoding='utf-8') as f:
+    with open(os.path.join(model_cfg_path, 'post_net', 'hidden_dims'), encoding='utf-8') as f:
         hidden_dims = ast.literal_eval(f.readline().strip())
         info['post_net_hidden_dims'] = hidden_dims
 
     num_enc_path = os.path.join(model_cfg_path, 'numerical_feature_encoder')
 
     if os.path.isdir(num_enc_path):
-        with open(os.path.join(num_enc_path, 'supported_features'), 'r', encoding='utf-8') as f:
+        with open(os.path.join(num_enc_path, 'supported_features'), encoding='utf-8') as f:
             supported_features = ast.literal_eval(f.readline().strip())
             info['numerical_features_used'] = supported_features
 

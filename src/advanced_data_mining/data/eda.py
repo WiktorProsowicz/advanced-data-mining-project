@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Contains utilities for exploratory data analysis (EDA)."""
 import os
 import re

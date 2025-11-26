@@ -1,16 +1,17 @@
-# -*- coding: utf-8 -*-
 """Contains definition preprocessed dataset loader."""
-
-from typing import Dict, List, Optional, Any
-import os
 import logging
-import sys
+import os
 import random
 import re
+import sys
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
-import torch
-import pandas as pd  # type: ignore
 import lightning as pl  # type: ignore
+import pandas as pd  # type: ignore
+import torch
 
 from advanced_data_mining.utils import misc
 
@@ -27,7 +28,7 @@ class ProcessedDataset(torch.utils.data.Dataset):
         self._ds_path = ds_path
 
         if not os.path.exists(self._ds_path):
-            _logger().error("Dataset path %s does not exist.", self._ds_path)
+            _logger().error('Dataset path %s does not exist.', self._ds_path)
             sys.exit(1)
 
         self._numerical_features = pd.read_pickle(
@@ -181,7 +182,7 @@ class ProcessedDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         """Returns the training data loader."""
 
-        assert self._train_ds is not None, "The training dataset has not been set up yet."
+        assert self._train_ds is not None, 'The training dataset has not been set up yet.'
 
         return torch.utils.data.DataLoader(self._train_ds,
                                            batch_size=self._batch_size,
@@ -192,7 +193,7 @@ class ProcessedDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         """Returns the validation data loader."""
 
-        assert self._val_ds is not None, "The validation dataset has not been set up yet."
+        assert self._val_ds is not None, 'The validation dataset has not been set up yet.'
 
         return torch.utils.data.DataLoader(self._val_ds,
                                            batch_size=self._batch_size,
@@ -203,7 +204,7 @@ class ProcessedDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         """Returns the test data loader."""
 
-        assert self._test_ds is not None, "The test dataset has not been set up yet."
+        assert self._test_ds is not None, 'The test dataset has not been set up yet.'
 
         return torch.utils.data.DataLoader(self._test_ds,
                                            batch_size=self._batch_size,

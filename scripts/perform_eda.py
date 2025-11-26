@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Script to perform exploratory data analysis (EDA) on Google Maps reviews dataset."""
 import json
 import logging

@@ -1,13 +1,7 @@
 {
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "pylint.args": [
-        "--disable=fixme",
-        "--disable=too-few-public-methods",
-        "--disable=too-many-instance-attributes",
-        "--disable=too-many-arguments",
-        "--disable=too-many-positional-arguments",
-        "--disable=too-many-locals",
-        "--disable=R0801"
+        "--rcfile=pyproject.toml"
     ],
     "pylint.importStrategy": "fromEnvironment",
     "pylint.interpreter": [
@@ -24,7 +18,9 @@
         "${workspaceFolder}/.venv/bin/autopep8"
     ],
     "autopep8.args": [
-        "--max-line-length=100"
+        "--aggressive",
+        "--max-line-length=100",
+        "--ignore-local-config"
     ],
     "[python]": {
         "editor.formatOnSave": true
