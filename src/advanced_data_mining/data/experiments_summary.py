@@ -135,8 +135,8 @@ def compose_summary_table(mlflow_runs: list[misc_utils.MLRun],
                           sort_by: str) -> str:
     """Composes a summary table of specified metrics across multiple MLflow runs."""
 
-    basic_info_labels = ['best_epoch', 'n_epochs', 'best_val_cl_accuracy', 'bow_encoders_used',
-                         'learning_rate']
+    basic_info_labels = ['best_epoch', 'n_epochs', 'best_val_cl_accuracy',
+                         'bow_encoders_used', 'numerical_features_used', 'learning_rate']
 
     header = '| Run name | ' + ' | '.join(basic_info_labels + metrics) + ' |\n'
     separator = '| --- ' + '| --- ' * (len(basic_info_labels) + len(metrics)) + ' |\n'
