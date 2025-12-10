@@ -24,3 +24,8 @@ just setup_env
 just build_project
 uv run python scripts/scrape_google_reviews.py +proxy.server=SERVER +proxy.username=USER +proxy.password=PASSWORD
 ```
+
+
+## Changelog
+
+The changes made to the project are recorded to the `Changelog.md` file.
