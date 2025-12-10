@@ -25,6 +25,13 @@ just build_project
 uv run python scripts/scrape_google_reviews.py +proxy.server=SERVER +proxy.username=USER +proxy.password=PASSWORD
 ```
 
+The recommended workflow of using the project assumes the following order of running the scripts:
+
+- **scrape_google_reviews** - create the raw dataset
+- **process_dataset** - extract all numerical features from the data
+- **perform_eda** - collect and visualize statistics describing the processed data
+- **train_model** - train a neural network that predicts the review sentiment
+- **summarize_experiment** - if multiple models are trained, use this script to compose stats and visualizations based on the test results
 
 ## Changelog
 
