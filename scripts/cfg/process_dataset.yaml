@@ -1,0 +1,13 @@
+---
+raw_ds_path: tmp/reviews
+output_path: tmp/processed_ds
+top_words_for_bow_repr: 100
+bottom_words_for_bow_repr: 100
+volume_velocity_cfg:
+  - chunk_length: 3
+    step_size: 2
+  - chunk_length: 5
+    step_size: 3
+  - chunk_length: 7
+    step_size: 3
+bert_model_device: cpu

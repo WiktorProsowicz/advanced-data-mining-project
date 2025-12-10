@@ -7,6 +7,68 @@
             "program": "${workspaceFolder}/scripts/scrape_google_reviews.py",
             "console": "integratedTerminal",
             "args": []
+        },
+        {
+            "name": "Process Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/process_dataset.py",
+            "console": "integratedTerminal",
+            "args": [
+                "bert_model_device=cuda",
+                "top_words_for_bow_repr=2000",
+                "bottom_words_for_bow_repr=2000",
+                "volume_velocity_cfg=[{chunk_length:3,step_size:1}]"
+            ]
+        },
+        {
+            "name": "Train model.",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train_model.py",
+            "console": "integratedTerminal",
+            "args": [
+                "model_cfg.bow_encoders.bow_bottom=null",
+                "model_cfg.bow_encoders.tfidf_bottom=null",
+                "model_cfg.bow_encoders.tfidf_top=null",
+                "model_cfg.bow_encoders.pos_bow=null",
+                "model_cfg.bow_encoders.bow_full=null",
+                "model_cfg.bow_encoders.tfidf_full=null",
+                "model_cfg.numerical_feature_encoder.supported_features=[num_words,cl_3_sz_1]",
+                "model_cfg.numerical_feature_encoder.params.input_dim=3",
+                "model_cfg.post_net.input_dim=40",
+                "data_cfg.batch_size=2",
+                "data_cfg.n_workers=4"
+            ]
+        },
+        {
+            "name": "Train model - explicit file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train_model.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config-path", "/home/devcontainer/workspace/tmp/train_runs/choosing_bow_encoder",
+                "--config-name", "tfidf_full_hidden_dims_512_128_with_pos_hidden_dims_16_8"
+            ]
+        },
+        {
+            "name": "Perform EDA",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/perform_eda.py",
+            "console": "integratedTerminal",
+            "args": [
+                "processed_ds_dir=tmp/processed_ds_v0.1",
+            ]
+        },
+        {
+            "name": "Summarize experiment",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/summarize_experiment.py",
+            "console": "integratedTerminal",
+            "args": []
         }
     ]
 }

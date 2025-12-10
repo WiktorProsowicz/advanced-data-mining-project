@@ -1,0 +1,78 @@
+---
+run_cfg:
+  mlflow_experiment: rating_predictor
+  mlflow_run: sample_run
+
+data_cfg:
+  ds_path: tmp/processed_ds_v0.2
+  batch_size: 32
+  n_workers: 12
+  train_val_split: 0.8
+  n_test_samples: 1000
+
+train_cfg:
+  seed: 2137
+  max_epochs: 15
+  classification_classes_weights: [6.0, 15.0, 15.0, 10.0, 1.5]
+  reg_loss_weight: 0.3
+  cl_loss_weight: 1.0
+  early_stopping_patience: 3
+
+optimizer_cfg:
+  lr: 0.001
+  weight_decay: 0.0001
+
+model_cfg:
+  bow_encoders:
+    bow_bottom:
+      input_dim: 2000
+      hidden_dims: [64, 32]
+      dropout_rate: 0.1
+    bow_top:
+      input_dim: 2000
+      hidden_dims: [64, 32]
+      dropout_rate: 0.1
+    tfidf_bottom:
+      input_dim: 2000
+      hidden_dims: [64, 32]
+      dropout_rate: 0.1
+    tfidf_top:
+      input_dim: 2000
+      hidden_dims: [64, 32]
+      dropout_rate: 0.1
+    pos_bow:
+      input_dim: 35
+      hidden_dims: [16, 8]
+      dropout_rate: 0.1
+    bow_full:
+      input_dim: 20000
+      hidden_dims: [256, 64]
+      dropout_rate: 0.1
+    tfidf_full:
+      input_dim: 20000
+      hidden_dims: [256, 64]
+      dropout_rate: 0.1
+    sentence_bert:
+      input_dim: 1024
+      hidden_dims: [128, 64]
+      dropout_rate: 0.1
+
+  numerical_feature_encoder:
+    supported_features:
+      - is_from_cracow
+      - num_words
+      - num_sentences
+      - cl_3_sz_1
+      - cl_7_sz_3
+      - cl_5_sz_3
+      - cl_3_sz_2
+      - cl_5_sz_2
+    params:
+      input_dim: 13
+      hidden_dims: [8, 8]
+      dropout_rate: 0.1
+
+  post_net:
+    input_dim: 224
+    hidden_dims: [128, 64]
+    dropout_rate: 0.1
