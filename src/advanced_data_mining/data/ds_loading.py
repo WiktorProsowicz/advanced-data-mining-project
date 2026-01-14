@@ -9,8 +9,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-import lightning as pl  # type: ignore
-import pandas as pd  # type: ignore
+import lightning as pl
+import pandas as pd
 import torch
 
 from advanced_data_mining.utils import misc

@@ -8,8 +8,8 @@ from typing import Tuple
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-import numpy as np  # type: ignore
-import pandas as pd  # type: ignore
+import numpy as np
+import pandas as pd
 import torch
 
 from advanced_data_mining.utils import misc

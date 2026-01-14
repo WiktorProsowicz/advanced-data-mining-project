@@ -17,9 +17,9 @@ from typing import Tuple
 
 import hydra
 import omegaconf
-import pandas as pd  # type: ignore
+import pandas as pd
 import torch
-import tqdm  # type: ignore
+import tqdm
 
 from advanced_data_mining.data import raw_ds
 from advanced_data_mining.data import text_processing

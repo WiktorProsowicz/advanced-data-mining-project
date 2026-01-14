@@ -8,10 +8,10 @@ from typing import Set
 from typing import Tuple
 
 import gruut
-import nltk  # type: ignore
+import nltk
 import numpy as np
 import torch
-import tqdm  # type: ignore
+import tqdm
 from transformers import BertModel
 from transformers import BertTokenizer
 
