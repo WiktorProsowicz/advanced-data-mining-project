@@ -1,32 +1,34 @@
 """Contains definitions of raw dataset structures and utilities for loading/saving them."""
-import dataclasses
+
 import json
 import os
 from typing import Dict
 from typing import List
 from typing import TypeAlias
 
+import pydantic
 
-@dataclasses.dataclass
-class Restaurant:
+
+class Restaurant(pydantic.BaseModel):
     """Represents a specific location on Google Maps."""
     href: str
     name: str
     basic_info: str
-    city: str = ''
+    # E.g. "Warsaw", "Krakow"
+    primary_location: str
+    # E.g. "old town"
+    secondary_location: str
 
     def __hash__(self) -> int:
         return hash(self.href)
 
 
-@dataclasses.dataclass
-class Review:
-    """Represents a review for a specific location on Google Maps."""
-
+class Review(pydantic.BaseModel):
+    """Represents a review for a specific restaurant on Google Maps."""
     text: str
     rating: float
-    translated: bool = False
-    original: str = ''
+    translated: bool
+    original: str
 
 
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]
@@ -45,21 +47,10 @@ class RawDSLoader:
 
         for json_file in os.listdir(self._raw_ds_path):
 
-            if any(city in json_file for city in ['krakow', 'kraków']):
-                city = 'Krakow'
-
-            else:
-                city = 'Warsaw'
-
             with open(os.path.join(self._raw_ds_path, json_file), encoding='utf-8') as f:
                 data = json.load(f)
 
-            location = Restaurant(
-                href=data['location']['href'],
-                name=data['location']['name'],
-                basic_info=data['location']['basic_info'],
-                city=city
-            )
+            location = Restaurant(**data['location'])
 
             ds[location] = [Review(**review) for review in data['reviews']]
 

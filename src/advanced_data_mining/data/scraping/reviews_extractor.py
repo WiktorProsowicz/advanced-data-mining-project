@@ -1,5 +1,4 @@
-"""Google Maps reviews scraping engine."""
-from __future__ import annotations
+"""Module that extracts reviews from Google Maps page corresponding to specific restaurant."""
 
 import logging
 import re
@@ -9,9 +8,7 @@ from typing import Iterator
 
 from playwright.sync_api import Locator
 from playwright.sync_api import Page
-from playwright.sync_api import sync_playwright
 
-from advanced_data_mining.data.raw_ds import Restaurant
 from advanced_data_mining.data.raw_ds import Review
 
 
@@ -19,7 +16,6 @@ def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-_RESTAURANT_CARD_SELECTOR = 'div.Nv2PK.THOPZb.CpccDe'
 _REVIEWS_CONTAINER_SELECTOR = 'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde'
 _REVIEW_SELECTOR = 'div.jftiEf'
 _SHOW_ORIGINAL_SELECTORS = (
@@ -30,7 +26,6 @@ _TRANSLATED_MARKER_SELECTOR = 'span:has-text("Translated by Google")'
 
 
 def _normalize_text(text: str) -> str:
-    """Normalizes """
     normalized = unicodedata.normalize('NFKC', text or '')
     normalized = re.sub(r'\s+', ' ', normalized).strip()
     return normalized.casefold()
@@ -75,89 +70,39 @@ class ReviewTexts:
             self.original = ''
 
 
-class MapsBrowser:
-    """Iterates over Google Maps search results and scrapes reviews from locations."""
+class ReviewsExtractor:
+    """Extracts reviews from Google Maps restaurant page."""
 
-    def __init__(self, proxy_cfg: dict[str, str], max_reviews_per_restaurant: int):
-        self._proxy_cfg = proxy_cfg
+    def __init__(self, page: Page, max_reviews: int) -> None:
+
+        self._max_reviews = max_reviews
         self._reviews_scroll_retries = 5
-        self._max_reviews_per_restaurant = max_reviews_per_restaurant
 
-    def get_locations_by_query(self, google_maps_query: str) -> list[Restaurant]:
-        """Fetch location cards returned by Google Maps for a search query."""
-        locations: list[Restaurant] = []
+        self._open_more_reviews(page)
+        self._scroll_reviews_to_end(page)
 
-        with sync_playwright() as playwright:
-            browser = playwright.firefox.launch(
-                headless=True,
-                proxy=self._proxy_cfg,  # type: ignore[arg-type]
-            )
-            context = browser.new_context(
-                locale='en-US',
-                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
-            )
-            page = context.new_page()
+        side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR).first
+        self._review_divs = side_panel.locator(_REVIEW_SELECTOR)
 
+    @property
+    def n_reviews(self) -> int:
+        """Returns the number of reviews extracted from the page."""
+        return self._review_divs.count()
+
+    def iter_reviews(self) -> Iterator[Review]:
+        """Yields the extracted reviews one by one."""
+
+        n_reviews_to_take = min(self._review_divs.count(), self._max_reviews)
+
+        for i in range(n_reviews_to_take):
+            review_div = self._review_divs.nth(i)
             try:
-                page.goto('https://www.google.com/maps', timeout=10000)
+                review = self._extract_review(review_div)
+                if review is not None:
+                    yield review
             except Exception as exc:  # pylint: disable=broad-except
-                _logger().error('Failed to open Google Maps: %s', exc)
-                return locations
+                _logger().error('Failed to extract review: %s', exc)
 
-            self._open_restaurants_panel(page, google_maps_query)
-            self._scroll_restaurants_to_end(page)
-
-            restaurant_divs = page.locator(_RESTAURANT_CARD_SELECTOR)
-
-            for i in range(restaurant_divs.count()):
-                locations.append(self._extract_location(restaurant_divs.nth(i)))
-
-        return locations
-
-    def scrape_reviews_for(self, location: Restaurant) -> Iterator[Review]:
-        """Yield reviews for a single location page."""
-        with sync_playwright() as playwright:
-            browser = playwright.firefox.launch(
-                headless=True,
-                proxy=self._proxy_cfg,  # type: ignore[arg-type]
-            )
-            context = browser.new_context(
-                locale='en-US',
-                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
-            )
-            page = context.new_page()
-            page.set_default_timeout(2000)
-
-            try:
-                page.goto(location.href, timeout=10000)
-            except Exception as exc:  # pylint: disable=broad-except
-                _logger().error(
-                    'Failed to open location page: %s, error: %s', location.href, exc
-                )
-                return
-
-            self._open_more_reviews(page)
-            self._scroll_reviews_to_end(page)
-
-            side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR).first
-            review_divs = side_panel.locator(_REVIEW_SELECTOR)
-
-            _logger().debug(
-                'Found %d reviews for location: %s',
-                review_divs.count(),
-                location.name,
-            )
-
-            for i in range(review_divs.count()):
-                review_div = review_divs.nth(i)
-                try:
-                    review = self._extract_review(review_div)
-                    if review is not None:
-                        yield review
-                except Exception as exc:  # pylint: disable=broad-except
-                    _logger().error('Failed to extract review: %s', exc)
-
-    # ----------------------------------------------------------------- Page helpers
     def _open_more_reviews(self, page: Page) -> None:
         button = page.locator('button:has-text("More reviews")')
         if button.count() == 0:
@@ -167,20 +112,6 @@ class MapsBrowser:
             page.wait_for_timeout(2000)
         except Exception as exc:  # pylint: disable=broad-except
             _logger().debug('Failed to click More reviews button: %s', exc)
-
-    def _open_restaurants_panel(self, page: Page, query: str) -> None:
-        search_panel = page.locator('input[id="searchboxinput"]')
-        if search_panel.count() == 0:
-            return
-
-        search_panel.first.click(timeout=4000)
-        page.wait_for_timeout(800)
-
-        search_panel.first.fill(query)
-        page.wait_for_timeout(800)
-
-        search_panel.first.press('Enter')
-        page.wait_for_timeout(4000)
 
     def _scroll_reviews_to_end(self, page: Page) -> None:
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR)
@@ -199,7 +130,7 @@ class MapsBrowser:
         retries_left = self._reviews_scroll_retries
 
         while review_divs_count > 0:
-            if review_divs_count >= self._max_reviews_per_restaurant:
+            if review_divs_count >= self._max_reviews:
                 return
 
             page.evaluate(
@@ -223,53 +154,6 @@ class MapsBrowser:
             retries_left = self._reviews_scroll_retries
             review_divs_count = new_count
 
-    def _scroll_restaurants_to_end(self, page: Page) -> None:
-        results_side = page.locator(
-            'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde.ecceSd'
-        )
-
-        if results_side.count() == 0:
-            return
-
-        results_side = results_side.nth(1)
-        containers = page.locator(_RESTAURANT_CARD_SELECTOR)
-
-        if containers.count() == 0:
-            return
-
-        containers_count = containers.count()
-
-        while containers_count > 0:
-            page.evaluate(
-                'el => el.scrollBy(0, el.scrollHeight)', results_side.element_handle()
-            )
-            page.wait_for_timeout(1000)
-
-            containers = page.locator(_RESTAURANT_CARD_SELECTOR)
-            new_count = containers.count()
-
-            if new_count == containers_count:
-                break
-
-            containers_count = new_count
-
-    def _extract_location(self, restaurant_div: Locator) -> Restaurant:
-        href = restaurant_div.locator('a.hfpxzc').first.get_attribute('href')
-
-        if href is None:
-            _logger().warning('Restaurant card missing href attribute!')
-            href = ''
-
-        basic_info_div = restaurant_div.locator('div.UaQhfb').first
-        restaurant_name = basic_info_div.locator('div.NrDZNb').first.inner_text()
-
-        el = basic_info_div.locator('div.W4Efsd').nth(1)
-        basic_info_div = el.locator('div.W4Efsd').first
-        basic_info = basic_info_div.inner_text()
-
-        return Restaurant(href=href, name=restaurant_name, basic_info=basic_info)
-
-    # ----------------------------------------------------------------- Review helpers
     def _extract_review(self, review_div: Locator) -> Review | None:
         more_btn = review_div.locator('button.w8nwRe.kyuRq')
         if more_btn.count() > 0:
