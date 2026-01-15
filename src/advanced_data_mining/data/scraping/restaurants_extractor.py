@@ -1,7 +1,7 @@
 """Module that extracts restaurants from Google Maps page corresponding with a given query."""
 
 import logging
-from typing import Iterator
+from typing import Iterator, List
 
 from playwright.sync_api import Locator
 from playwright.sync_api import Page
@@ -39,13 +39,16 @@ class RestaurantsExtractor:
         """Returns the number of restaurant cards found on the page."""
         return self._restaurant_divs.count()
 
-    def iter_restaurants(self) -> Iterator[Restaurant]:
-        """Yields the restaurants extracted from the page."""
+    def get_restaurants(self) -> List[Restaurant]:
+        """Returns the restaurants extracted from the page."""
 
         n_restaurants_to_take = min(self._restaurant_divs.count(), self._max_restaurants)
 
+        restaurants = []
         for i in range(n_restaurants_to_take):
-            yield self._extract_location(self._restaurant_divs.nth(i))
+            restaurants.append(self._extract_location(self._restaurant_divs.nth(i)))
+
+        return restaurants
 
     def _open_restaurants_panel(self, page: Page, query: str) -> None:
         search_panel = page.locator('input[id="UGojuc"]')
