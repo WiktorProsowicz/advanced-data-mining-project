@@ -1,7 +1,11 @@
 ---
 proxy:
+  server: SERVER
+  username: USERNAME
+  password: PASSWORD
 google_maps_queries:
-  - kraków rynek kebab
-  - kraków krowodrza kebab
+  kraków:
+    - kraków rynek kebab
+    - kraków krowodrza kebab
 output_dir: tmp/reviews
 max_reviews_per_restaurant: 300

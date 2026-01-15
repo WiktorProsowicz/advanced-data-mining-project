@@ -1,5 +1,5 @@
 """Script to scrape Google Maps reviews for locations matching specified queries."""
-import dataclasses
+
 import json
 import logging
 import pathlib
@@ -9,13 +9,13 @@ import hydra
 import omegaconf
 import tqdm
 
-from advanced_data_mining.data import maps_browser
+from advanced_data_mining.data.scraping import maps_browser
 from advanced_data_mining.data import raw_ds
 from advanced_data_mining.utils import logging_utils
 
 
 def _logger() -> logging.Logger:
-    return logging.getLogger(__name__)
+    return logging.getLogger('advanced_data_mining')
 
 
 def _name_to_valid_path(name: str) -> str:
@@ -39,7 +39,7 @@ def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
 
     _logger().info('Scraping reviews for location: %s', location.name)
 
-    reviews = [dataclasses.asdict(review)
+    reviews = [review.model_dump()
                for review
                in tqdm.tqdm(scraper.scrape_reviews_for(location), unit='review', desc='Reviews')]
 
@@ -48,7 +48,7 @@ def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
         return
 
     payload = {
-        'location': dataclasses.asdict(location),
+        'location': location.model_dump(),
         'reviews': reviews
     }
 
@@ -68,6 +68,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
 
     logging_utils.setup_logging(script_signature='scrape_google_reviews')
 
+    _logger().info('Script started with configuration: %s', omegaconf.OmegaConf.to_yaml(script_cfg))
+
     if script_cfg.proxy is None:
         _logger().critical('Proxy configuration is required.')
         sys.exit(1)
@@ -79,23 +81,32 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
             'password': script_cfg.proxy.password,
         },
         max_reviews_per_restaurant=script_cfg.max_reviews_per_restaurant,
+        max_restaurants_per_location=script_cfg.max_restaurants_per_location,
     )
 
     output_dir = pathlib.Path(script_cfg.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for query in script_cfg.google_maps_queries:
-        _logger().info('Starting scraping for query: %s', query)
+    location_pairs = [(primary_loc, secondary_loc)
+                      for primary_loc, secondary_locs in script_cfg.google_maps_queries.items()
+                      for secondary_loc in secondary_locs]
 
-        locations = scraper.get_locations_by_query(query)
+    for primary_loc, secondary_loc in location_pairs:
+        _logger().info('Starting scraping for location: %s %s', primary_loc, secondary_loc)
+
+        locations = list(scraper.get_locations_by_query(primary_loc, secondary_loc))
 
         if not locations:
-            _logger().warning('No locations found for query: %s', query)
+            _logger().warning('No locations found for location: %s %s', primary_loc, secondary_loc)
             continue
 
-        _logger().info('Found %d locations for query: %s', len(locations), query)
+        _logger().info('Found %d locations for location: %s %s',
+                       len(locations), primary_loc, secondary_loc)
 
-        query_output_dir = output_dir / _name_to_valid_path(query)
+        query_output_dir = (output_dir /
+                            _name_to_valid_path(primary_loc) /
+                            _name_to_valid_path(secondary_loc))
+        query_output_dir.mkdir(parents=True, exist_ok=True)
 
         for loc in locations:
 
