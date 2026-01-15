@@ -30,6 +30,26 @@ _SHOW_ORIGINAL_SELECTORS = (
 _TRANSLATED_MARKER_SELECTOR = 'span:has-text("Translated by Google")'
 
 
+def _normalize_text(text: str) -> str:
+    """Normalizes """
+    normalized = unicodedata.normalize('NFKC', text or '')
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized.casefold()
+
+
+def _has_meaningful_text(self, text: str) -> bool:
+    if not text:
+        return False
+    has_letter = re.search(r'[A-Za-zÀ-ž]', text) is not None
+    alnum_len = len(re.findall(r'[0-9A-Za-zÀ-ž]', text))
+    return has_letter and alnum_len >= 3
+
+
+def _long_enough(self, text: str) -> bool:
+    tokens = re.findall(r'\w+', text, flags=re.UNICODE)
+    return len(tokens) >= 2 or len(self._normalize_text(text)) >= 10
+
+
 @dataclass
 class ReviewTexts:
     """Holds the textual fragments extracted from a review block."""
@@ -37,6 +57,15 @@ class ReviewTexts:
     is_translated: bool
     translated: str
     original: str
+
+    def __init__(self, is_translated: bool, translated: str, original: str) -> None:
+
+        if not is_translated:
+            self.original = ''
+
+        if normalizer(self.translated) == normalizer(self.original):
+            self.is_translated = False
+            self.original = ''
 
     def harmonize(self, normalizer: Callable[[str], str]) -> None:
         """
@@ -330,20 +359,3 @@ class MapsBrowser:
         aria = stars_span.get_attribute('aria-label') or ''
         isolated_num = re.search(r'[\d]+', aria)
         return float(isolated_num.group(0)) if isolated_num else 0.0
-
-    # ----------------------------------------------------------------- Text filters
-    def _normalize_text(self, text: str) -> str:
-        normalized = unicodedata.normalize('NFKC', text or '')
-        normalized = re.sub(r'\s+', ' ', normalized).strip()
-        return normalized.casefold()
-
-    def _has_meaningful_text(self, text: str) -> bool:
-        if not text:
-            return False
-        has_letter = re.search(r'[A-Za-zÀ-ž]', text) is not None
-        alnum_len = len(re.findall(r'[0-9A-Za-zÀ-ž]', text))
-        return has_letter and alnum_len >= 3
-
-    def _long_enough(self, text: str) -> bool:
-        tokens = re.findall(r'\w+', text, flags=re.UNICODE)
-        return len(tokens) >= 2 or len(self._normalize_text(text)) >= 10
