@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Dict
+from typing import Dict, Optional
 from typing import List
 from typing import TypeAlias
 
@@ -23,12 +23,18 @@ class Restaurant(pydantic.BaseModel):
         return hash(self.href)
 
 
+class Author(pydantic.BaseModel):
+    """Represents the author of a review on Google Maps."""
+    name: str
+    n_reviews: Optional[int]
+
+
 class Review(pydantic.BaseModel):
     """Represents a review for a specific restaurant on Google Maps."""
     text: str
+    original: Optional[str]
     rating: float
-    translated: bool
-    original: str
+    author: Author
 
 
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]

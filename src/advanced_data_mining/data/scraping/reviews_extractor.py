@@ -9,7 +9,7 @@ from typing import AsyncIterator
 from playwright.async_api import Locator
 from playwright.async_api import Page
 
-from advanced_data_mining.data.raw_ds import Review
+from advanced_data_mining.data.raw_ds import Review, Author
 
 
 def _logger() -> logging.Logger:
@@ -23,6 +23,8 @@ _SHOW_ORIGINAL_SELECTORS = (
     'button:has-text("Show original")',
 )
 _TRANSLATED_MARKER_SELECTOR = 'span:has-text("Translated by Google")'
+_AUTHOR_NAME_SELECTOR = 'button.al6Kxe div.d4r55'
+_AUTHOR_STATS_SELECTOR = 'button.al6Kxe div.RfnDt'
 
 
 def _normalize_text(text: str) -> str:
@@ -131,6 +133,7 @@ class ReviewsExtractor:
             return
 
         review_divs = side_panel.first.locator(_REVIEW_SELECTOR)
+        await page.wait_for_timeout(1000)
         review_divs_count = await review_divs.count()
 
         if review_divs_count == 0:
@@ -187,8 +190,8 @@ class ReviewsExtractor:
         return Review(
             text=texts.translated.strip(),
             rating=rating,
-            translated=texts.is_translated,
-            original=texts.original.strip() if texts.is_translated else '',
+            original=texts.original.strip() if texts.is_translated else None,
+            author=await self._extract_author(review_div),
         )
 
     async def _extract_texts(self, review_div: Locator) -> ReviewTexts:
@@ -216,6 +219,26 @@ class ReviewsExtractor:
             original=original_text,
         )
         return texts
+
+    async def _extract_author(self, review_div: Locator) -> Author:
+
+        name_locator = review_div.locator(_AUTHOR_NAME_SELECTOR)
+        stats_locator = review_div.locator(_AUTHOR_STATS_SELECTOR)
+
+        if await name_locator.count() == 0 or await stats_locator.count() == 0:
+            _logger().warning('Author information not found in review.')
+            return Author(name='Anonymous', n_reviews=0)
+
+        name = await name_locator.first.inner_text()
+        stats = await stats_locator.first.inner_text()
+
+        match = re.match(r'(\d+)\s+reviews?', stats)
+        n_reviews = int(match.group(1)) if match else None
+
+        return Author(
+            name=name.strip(),
+            n_reviews=n_reviews,
+        )
 
     async def _reveal_original(self, review_div: Locator) -> str:
         for selector in _SHOW_ORIGINAL_SELECTORS:
