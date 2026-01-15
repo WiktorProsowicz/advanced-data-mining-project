@@ -2,6 +2,7 @@
 import dataclasses
 import hashlib
 import os
+from typing import List
 
 import mlflow
 
@@ -20,7 +21,7 @@ class MLRun:
     path: str
 
 
-def get_mlruns(experiment_name: str):
+def get_mlruns(experiment_name: str) -> List[MLRun]:
     """Generates an MLRun object given experiment and run names."""
 
     experiment = mlflow.get_experiment_by_name(experiment_name)

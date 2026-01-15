@@ -9,13 +9,14 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
+import matplotlib.figure as mlp_figure
 import matplotlib.pyplot as plt
 import numpy as np
 
 from advanced_data_mining.utils import misc as misc_utils
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
@@ -24,10 +25,10 @@ def extract_test_metrics(mlflow_run: misc_utils.MLRun) -> Dict[str, float]:
 
     metrics = {}
 
-    metrics_path = misc_utils.os.path.join(mlflow_run.path, 'metrics', 'test')
+    metrics_path = os.path.join(mlflow_run.path, 'metrics', 'test')
 
-    for metric_file in misc_utils.os.listdir(metrics_path):
-        with open(misc_utils.os.path.join(metrics_path, metric_file), encoding='utf-8') as f:
+    for metric_file in os.listdir(metrics_path):
+        with open(os.path.join(metrics_path, metric_file), encoding='utf-8') as f:
             _, value, _ = f.readline().strip().split(' ')
 
         metrics[metric_file] = float(value)
@@ -37,7 +38,7 @@ def extract_test_metrics(mlflow_run: misc_utils.MLRun) -> Dict[str, float]:
 
 def plot_metric_pair(mlflow_runs: list[misc_utils.MLRun],
                      x_metric: str,
-                     y_metric: str) -> plt.Figure:
+                     y_metric: str) -> mlp_figure.Figure:
     """Creates a scatter plot for two given metrics across multiple MLflow runs."""
 
     fig, ax = plt.subplots(figsize=(12, 12))
@@ -163,7 +164,7 @@ def compose_summary_table(mlflow_runs: list[misc_utils.MLRun],
     return table
 
 
-def get_summary_figures(mlflow_runs: list[misc_utils.MLRun]) -> Dict[str, plt.Figure]:
+def get_summary_figures(mlflow_runs: list[misc_utils.MLRun]) -> Dict[str, mlp_figure.Figure]:
     """Generates summary figures for given MLflow runs."""
 
     figures = {}
@@ -192,9 +193,9 @@ def get_best_and_worst_runs(mlflow_runs: list[misc_utils.MLRun],
 
 
 def _get_metric_distributions_figures(
-        runs_metrics: Dict[misc_utils.MLRun, Dict[str, float]]) -> Dict[str, plt.Figure]:
+        runs_metrics: Dict[misc_utils.MLRun, Dict[str, float]]) -> Dict[str, mlp_figure.Figure]:
 
-    figures: Dict[str, plt.Figure] = {}
+    figures: Dict[str, mlp_figure.Figure] = {}
 
     encoders_groups = collections.defaultdict(list)
     lr_groups = collections.defaultdict(list)
@@ -265,12 +266,12 @@ def _get_metric_distributions_by_groups(
         runs_metrics: Dict[misc_utils.MLRun, Dict[str, float]],
         groups: Dict[str, List[misc_utils.MLRun]],
         label: str
-) -> Dict[str, plt.Figure]:
+) -> Dict[str, mlp_figure.Figure]:
 
     metrics = ['cl_accuracy_weighted_fine', 'cl_accuracy_weighted_coarse',
                'cl_accuracy_macro_fine', 'cl_accuracy_macro_coarse']
 
-    figures: Dict[str, plt.Figure] = {}
+    figures: Dict[str, mlp_figure.Figure] = {}
 
     for metric in metrics:
 

@@ -58,7 +58,7 @@ class TextPreprocessor:
         return self._vocabulary
 
     @staticmethod
-    def save_vocabulary_to_file(vocabulary: Vocabulary, filepath: str):
+    def save_vocabulary_to_file(vocabulary: Vocabulary, filepath: str) -> None:
         """Saves the vocabulary to a file."""
         with open(filepath, 'w', encoding='utf-8') as f:
 
@@ -127,7 +127,7 @@ class TextPreprocessor:
         velocities = [torch.norm(centroids[i] - centroids[i - 1]).item()
                       for i in range(1, len(centroids))]
 
-        return np.mean(velocities).item()
+        return float(np.mean(velocities).item())
 
     def calc_trace_volume(self,
                           sentence_embeddings: List[torch.Tensor],
@@ -145,7 +145,7 @@ class TextPreprocessor:
         min_values = torch.min(cat_embeddings, dim=0).values
         max_values = torch.max(cat_embeddings, dim=0).values
 
-        return torch.norm(max_values - min_values).item()
+        return float(torch.norm(max_values - min_values).item())
 
     def _prepare_chunks(self,
                         tensor: torch.Tensor,
@@ -166,7 +166,7 @@ class TextPreprocessor:
 
         return self._bert_tokenizer, self._bert_model
 
-    def update_vocabulary(self, texts: List[str]):
+    def update_vocabulary(self, texts: List[str]) -> None:
         """Updates the internal vocabulary with words from the provided texts."""
 
         for text in tqdm.tqdm(texts, desc='Building vocabulary', total=len(texts)):
@@ -203,7 +203,7 @@ class TextPreprocessor:
 
         return torch.tensor(bow_vector)
 
-    def update_pos_vocab(self, texts: List[str]):
+    def update_pos_vocab(self, texts: List[str]) -> None:
         """Updates the internal vocabulary with parts of speech from the provided texts."""
 
         for text in tqdm.tqdm(texts, desc='Building POS vocabulary', total=len(texts)):
@@ -214,13 +214,13 @@ class TextPreprocessor:
             for _, pos in pos_tags:
                 self._pos_vocab.add(pos)
 
-    def save_pos_vocab_to_file(self, filepath: str):
+    def save_pos_vocab_to_file(self, filepath: str) -> None:
         """Saves the POS vocabulary to a file."""
         with open(filepath, 'w', encoding='utf-8') as f:
             for pos in sorted(self._pos_vocab):
                 f.write(f'{pos}\n')
 
-    def load_pos_vocab_from_file(self, filepath: str):
+    def load_pos_vocab_from_file(self, filepath: str) -> None:
         """Loads POS vocabulary from a file."""
         self._pos_vocab.clear()
         with open(filepath, encoding='utf-8') as f:
@@ -272,7 +272,7 @@ class TextPreprocessor:
 
         return torch.tensor(tfidf_vector).to_sparse()
 
-    def load_vocab_from_file(self, filepath: str):
+    def load_vocab_from_file(self, filepath: str) -> None:
         """Loads vocabulary from a file."""
 
         self._vocabulary.word_counts.clear()

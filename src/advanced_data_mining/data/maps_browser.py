@@ -5,7 +5,6 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Callable
 from typing import Iterator
 
 from playwright.sync_api import Locator
@@ -16,7 +15,7 @@ from advanced_data_mining.data.raw_ds import Restaurant
 from advanced_data_mining.data.raw_ds import Review
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
@@ -37,7 +36,7 @@ def _normalize_text(text: str) -> str:
     return normalized.casefold()
 
 
-def _has_meaningful_text(self, text: str) -> bool:
+def _has_meaningful_text(text: str) -> bool:
     if not text:
         return False
     has_letter = re.search(r'[A-Za-zÀ-ž]', text) is not None
@@ -45,14 +44,18 @@ def _has_meaningful_text(self, text: str) -> bool:
     return has_letter and alnum_len >= 3
 
 
-def _long_enough(self, text: str) -> bool:
+def _long_enough(text: str) -> bool:
     tokens = re.findall(r'\w+', text, flags=re.UNICODE)
-    return len(tokens) >= 2 or len(self._normalize_text(text)) >= 10
+    return len(tokens) >= 2 or len(_normalize_text(text)) >= 10
 
 
 @dataclass
 class ReviewTexts:
-    """Holds the textual fragments extracted from a review block."""
+    """Holds the textual fragments extracted from a review block.
+
+    The `is_translated` flag is guaranteed to be consistent with the presence of the
+    `original` text, i.e. the original is not empty
+    """
 
     is_translated: bool
     translated: str
@@ -60,28 +63,14 @@ class ReviewTexts:
 
     def __init__(self, is_translated: bool, translated: str, original: str) -> None:
 
+        self.is_translated = is_translated
+        self.translated = translated
+        self.original = original
+
         if not is_translated:
             self.original = ''
 
-        if normalizer(self.translated) == normalizer(self.original):
-            self.is_translated = False
-            self.original = ''
-
-    def harmonize(self, normalizer: Callable[[str], str]) -> None:
-        """
-        Ensure the translated/original pair is internally consistent.
-
-        If both texts normalize to the same value, treat the review as non-translated
-        and blank the original field to avoid duplicating content downstream.
-        """
-        if not self.is_translated:
-            self.original = ''
-            return
-
-        if not self.original:
-            return
-
-        if normalizer(self.translated) == normalizer(self.original):
+        elif _normalize_text(self.translated) == _normalize_text(self.original):
             self.is_translated = False
             self.original = ''
 
@@ -287,18 +276,17 @@ class MapsBrowser:
             try:
                 more_btn.first.click(timeout=800)
                 review_div.page.wait_for_timeout(120)
-            except Exception:  # pylint: disable=broad-except
+            except TimeoutError:  # pylint: disable=broad-except
                 pass
 
         rating = self._extract_rating(review_div.locator('span.kvMYJc').first)
         texts = self._extract_texts(review_div)
-        texts.harmonize(self._normalize_text)
 
-        if not self._has_meaningful_text(texts.translated):
+        if not _has_meaningful_text(texts.translated):
             _logger().debug('Skipping review with no meaningful text: %s', texts.translated)
             return None
 
-        if not self._long_enough(texts.translated):
+        if not _long_enough(texts.translated):
             _logger().debug('Skipping review with too short text: %s', texts.translated)
             return None
 

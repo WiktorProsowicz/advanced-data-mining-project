@@ -45,7 +45,7 @@ class RatingPredictor(pl.LightningModule):
         self._training_cfg = training_cfg
         self._optimizer_cfg = optimizer_cfg
 
-        def train_metrics_cl(label, n_classes):
+        def train_metrics_cl(label: str, n_classes: int) -> torchmetrics.MetricCollection:
             return torchmetrics.MetricCollection({
                 f'cl_accuracy_weighted_{label}': torchmetrics.Accuracy(task='multiclass',
                                                                        num_classes=n_classes,
@@ -84,7 +84,7 @@ class RatingPredictor(pl.LightningModule):
             training_cfg['classification_classes_weights']
         ))
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(
             self.parameters(),
             **self._optimizer_cfg
@@ -112,7 +112,7 @@ class RatingPredictor(pl.LightningModule):
         else:
             combined_features = torch.cat(encoded_bow_features, dim=-1)
 
-        return self._postnet(combined_features)
+        return self._postnet(combined_features)  # type: ignore[no-any-return]
 
     def training_step(self,  # pylint: disable=arguments-differ
                       batch: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -147,7 +147,7 @@ class RatingPredictor(pl.LightningModule):
 
         return total_loss
 
-    def on_train_epoch_end(self):
+    def on_train_epoch_end(self) -> None:
 
         tensorboard = self.loggers[1].experiment  # type: ignore
 
@@ -190,7 +190,7 @@ class RatingPredictor(pl.LightningModule):
 
         self._val_coarse_metrics_cl.update(coarse_preds, coarse_labels)
 
-    def on_validation_epoch_end(self):
+    def on_validation_epoch_end(self) -> None:
 
         tensorboard = self.loggers[1].experiment  # type: ignore
 
@@ -240,7 +240,7 @@ class RatingPredictor(pl.LightningModule):
 
         self._test_coarse_metrics_cl.update(coarse_preds, coarse_labels)
 
-    def on_test_epoch_end(self):
+    def on_test_epoch_end(self) -> None:
 
         tensorboard = self.loggers[1].experiment  # type: ignore
 
@@ -263,7 +263,9 @@ class RatingPredictor(pl.LightningModule):
         self._test_metrics_cl.reset()
         self._test_mae.reset()
 
-    def sanitize_outputs(self, reg_outputs: torch.Tensor, cl_outputs: torch.Tensor):
+    def sanitize_outputs(self,
+                         reg_outputs: torch.Tensor,
+                         cl_outputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Converts raw batched model outputs into rating predictions."""
 
         reg_possible_values = torch.tensor([1, 2, 3, 4, 5])

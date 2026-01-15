@@ -27,7 +27,7 @@ from advanced_data_mining.utils import logging_utils
 from advanced_data_mining.utils import misc
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
@@ -81,7 +81,7 @@ def _obtain_preprocessed_ds(raw_dataset: raw_ds.RawDataset,
 def _prepare_bow_representations(vocabulary_path: str,
                                  dataset: pd.DataFrame,
                                  output_path: str,
-                                 use_tfidf: bool):
+                                 use_tfidf: bool) -> None:
     """Prepares and saves BOW representations for the dataset."""
 
     text_processor = text_processing.TextPreprocessor()
@@ -108,7 +108,7 @@ def _prepare_bow_representations(vocabulary_path: str,
 
 def _prepare_bert_embeddings(dataset: pd.DataFrame,
                              text_processor: text_processing.TextPreprocessor,
-                             output_dir: str):
+                             output_dir: str) -> None:
     """Prepares and saves BERT embeddings for the dataset."""
 
     _logger().info('Preparing BERT embeddings...')
@@ -143,7 +143,7 @@ def _prepare_bert_embeddings(dataset: pd.DataFrame,
 def _prepare_numerical_features(dataset: pd.DataFrame,
                                 text_processor: text_processing.TextPreprocessor,
                                 chunking_cfg: List[Dict[str, int]],
-                                output_dir: str):
+                                output_dir: str) -> None:
     """Prepares and saves numerical features for the dataset."""
 
     _logger().info('Preparing numerical features...')
@@ -198,7 +198,7 @@ def _prepare_numerical_features(dataset: pd.DataFrame,
 
 def _prepare_pos_based_features(dataset: pd.DataFrame,
                                 text_processor: text_processing.TextPreprocessor,
-                                output_dir: str):
+                                output_dir: str) -> None:
     """Prepares and saves POS-based features for the dataset."""
 
     _logger().info('Preparing POS-based features...')
@@ -217,7 +217,7 @@ def _prepare_pos_based_features(dataset: pd.DataFrame,
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='process_dataset')
-def main(cfg: omegaconf.DictConfig):
+def main(cfg: omegaconf.DictConfig) -> None:
     """Loads and processes the dataset according to the provided configuration."""
 
     logging_utils.setup_logging('process_dataset')

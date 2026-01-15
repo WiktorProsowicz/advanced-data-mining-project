@@ -9,12 +9,12 @@ import omegaconf
 from advanced_data_mining.data import eda
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='perform_eda')
-def main(script_cfg: omegaconf.DictConfig):
+def main(script_cfg: omegaconf.DictConfig) -> None:
     """Performs exploratory data analysis (EDA) on Google Maps reviews dataset."""
 
     _logger().info('Starting EDA script with config:\n%s',

@@ -19,13 +19,13 @@ from advanced_data_mining.utils import logging_utils
 from advanced_data_mining.utils import misc as misc_utils
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
 def _save_example_outputs(run: misc_utils.MLRun,
                           data_module: ds_loading.ProcessedDataModule,
-                          output_path: str):
+                          output_path: str) -> None:
 
     checkpoint_path = experiments_summary.get_best_checkpoint_path(run)
     model = rating_predictor.RatingPredictor.load_from_checkpoint(checkpoint_path,  # pylint: disable=no-value-for-parameter
@@ -38,13 +38,13 @@ def _save_example_outputs(run: misc_utils.MLRun,
 
     for i, inputs in enumerate(itertools.islice(test_loader, 30)):
 
-        raw_sample = test_loader.dataset.get_raw_sample(i)
+        raw_sample = data_module.test_ds.get_raw_sample(i)
 
         with torch.no_grad():
             cl_output, _ = model.sanitize_outputs(*model(inputs))
 
         examples.append({
-            'original_info': raw_sample.to_dict(),
+            'original_info': raw_sample,
             'predicted_rating': int(cl_output[0].item()) + 1
         })
 
@@ -53,7 +53,7 @@ def _save_example_outputs(run: misc_utils.MLRun,
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='summarize_experiment')
-def main(cfg: omegaconf.DictConfig):
+def main(cfg: omegaconf.DictConfig) -> None:
     """Runs testing and summarizes results for a given experiment."""
 
     logging_utils.setup_logging('summarize_experiment')

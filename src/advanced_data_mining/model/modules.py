@@ -48,7 +48,7 @@ class NumFeaturesEncoder(torch.nn.Module):
 
         super().__init__()
 
-        self._layers = torchkan.KAN(
+        self._layers = torchkan.KAN(  # type: ignore
             layers_hidden=[input_dim] + hidden_dims,
             grid_size=5,
             spline_order=3,
@@ -63,7 +63,7 @@ class NumFeaturesEncoder(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Encodes input numerical feature into dense representation."""
 
-        return self._postnet(self._layers(x))
+        return self._postnet(self._layers(x))  # type: ignore[no-any-return]
 
 
 class PostNet(torch.nn.Module):

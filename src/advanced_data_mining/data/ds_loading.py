@@ -16,11 +16,11 @@ import torch
 from advanced_data_mining.utils import misc
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-class ProcessedDataset(torch.utils.data.Dataset):
+class ProcessedDataset(torch.utils.data.Dataset[Dict[str, torch.Tensor]]):
     """Reads and loads preprocessed dataset samples."""
 
     def __init__(self, ds_path: str, sample_indices: List[int]):
@@ -31,10 +31,10 @@ class ProcessedDataset(torch.utils.data.Dataset):
             _logger().error('Dataset path %s does not exist.', self._ds_path)
             sys.exit(1)
 
-        self._numerical_features = pd.read_pickle(
+        self._numerical_features: pd.DataFrame = pd.read_pickle(
             os.path.join(self._ds_path, 'numerical_features.pkl'))
 
-        self._preprocessed_ds = pd.read_pickle(
+        self._preprocessed_ds: pd.DataFrame = pd.read_pickle(
             os.path.join(self._ds_path, 'preprocessed_dataset.pkl')
         )
 
@@ -47,7 +47,9 @@ class ProcessedDataset(torch.utils.data.Dataset):
         """Returns unprocessed data for a given sample."""
 
         sample_idx = self._sample_indices[idx]
-        return self._preprocessed_ds.iloc[sample_idx]
+
+        return {str(k): v
+                for k, v in self._preprocessed_ds.iloc[sample_idx].to_dict().items()}
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
 
@@ -154,7 +156,13 @@ class ProcessedDataModule(pl.LightningDataModule):
         self._val_ds: Optional[ProcessedDataset] = None
         self._test_ds: Optional[ProcessedDataset] = None
 
-    def setup(self, stage: str):  # pylint: disable=unused-argument
+    @property
+    def test_ds(self) -> ProcessedDataset:
+        """Returns the test dataset."""
+        assert self._test_ds is not None, 'The test dataset has not been set up yet.'
+        return self._test_ds
+
+    def setup(self, _: str) -> None:
         """Sets up the datasets for training, validation and testing."""
 
         preprocessed_ds = pd.read_pickle(
@@ -179,7 +187,7 @@ class ProcessedDataModule(pl.LightningDataModule):
         self._test_ds = ProcessedDataset(ds_path=self._ds_path,
                                          sample_indices=test_indices)
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> torch.utils.data.DataLoader[Dict[str, torch.Tensor]]:
         """Returns the training data loader."""
 
         assert self._train_ds is not None, 'The training dataset has not been set up yet.'
@@ -190,7 +198,7 @@ class ProcessedDataModule(pl.LightningDataModule):
                                            pin_memory=True,
                                            shuffle=True)
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> torch.utils.data.DataLoader[Dict[str, torch.Tensor]]:
         """Returns the validation data loader."""
 
         assert self._val_ds is not None, 'The validation dataset has not been set up yet.'
@@ -201,7 +209,7 @@ class ProcessedDataModule(pl.LightningDataModule):
                                            pin_memory=True,
                                            shuffle=False)
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> torch.utils.data.DataLoader[Dict[str, torch.Tensor]]:
         """Returns the test data loader."""
 
         assert self._test_ds is not None, 'The test dataset has not been set up yet.'

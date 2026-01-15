@@ -1,5 +1,4 @@
 """Script to scrape Google Maps reviews for locations matching specified queries."""
-
 import dataclasses
 import json
 import logging
@@ -8,11 +7,11 @@ import sys
 
 import hydra
 import omegaconf
-import tqdm  # type: ignore
+import tqdm
 
 from advanced_data_mining.data import maps_browser
-from advanced_data_mining.utils import logging_utils
 from advanced_data_mining.data import raw_ds
+from advanced_data_mining.utils import logging_utils
 
 
 def _logger() -> logging.Logger:
@@ -27,7 +26,7 @@ def _name_to_valid_path(name: str) -> str:
 
 def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
                                    location: raw_ds.Restaurant,
-                                   output_dir: pathlib.Path):
+                                   output_dir: pathlib.Path) -> None:
     """Scrapes reviews for a given restaurant and saves them to a file."""
 
     output_path = output_dir / f'{_name_to_valid_path(location.name)}.json'
@@ -64,7 +63,7 @@ def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='scrape_google_reviews')
-def main(script_cfg: omegaconf.DictConfig):
+def main(script_cfg: omegaconf.DictConfig) -> None:
     """Scrapes Google Maps reviews for locations matching specified queries."""
 
     logging_utils.setup_logging(script_signature='scrape_google_reviews')

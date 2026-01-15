@@ -8,7 +8,7 @@ We recommend you to check out the **paper** describing the theory, methods and e
 
 ```yaml
 - .devcontainer   # Devcontainer setup.
-- doc/            # Documentation, experiments description.         
+- doc/            # Documentation, experiments description.
 - scripts/        # Contains scripts for running scraping process, EDA etc.
 - src/            # Source code.
 - justfile        # Contains setup recipes, check out for installing deps etc.
@@ -17,7 +17,7 @@ We recommend you to check out the **paper** describing the theory, methods and e
 
 ## Usage
 
-The project's public API, available for the user, can be found in the `scripts` directory. It contains scripts for running data scraping & processing pipelines, models training and obtaining visualizations and summaries. 
+The project's public API, available for the user, can be found in the `scripts` directory. It contains scripts for running data scraping & processing pipelines, models training and obtaining visualizations and summaries.
 
 ```
 just setup_env

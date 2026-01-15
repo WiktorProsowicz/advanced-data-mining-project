@@ -18,12 +18,12 @@ from advanced_data_mining.model import rating_predictor
 from advanced_data_mining.utils import logging_utils
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='train_model')
-def main(cfg: omegaconf.DictConfig):
+def main(cfg: omegaconf.DictConfig) -> None:
     """Runs the model training pipeline."""
 
     if cfg.train_cfg.seed is not None:

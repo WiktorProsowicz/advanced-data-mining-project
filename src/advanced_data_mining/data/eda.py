@@ -6,6 +6,7 @@ from typing import Dict
 from typing import Set
 from typing import Tuple
 
+import matplotlib.figure as mlp_figure
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 import numpy as np
@@ -15,7 +16,7 @@ import torch
 from advanced_data_mining.utils import misc
 
 
-def is_outlier(series: pd.Series) -> bool:
+def is_outlier(series: pd.Series) -> pd.Series:
     """Determines what sentences are outliers using the IQR method."""
 
     q1 = series.quantile(0.25)
@@ -138,10 +139,10 @@ class EDAFeatureExtractor:
 
         return stats
 
-    def get_figures(self) -> Dict[str, plt.Figure]:
+    def get_figures(self) -> Dict[str, mlp_figure.Figure]:
         """Generates figures for EDA."""
 
-        figures: Dict[str, plt.Figure] = {}
+        figures: Dict[str, mlp_figure.Figure] = {}
 
         figures.update(self._get_distribution_figures())
 
@@ -184,7 +185,7 @@ class EDAFeatureExtractor:
             'full_bbow_with_zero_elements': full_bbow_with_zero_elements.to_dict(orient='records')
         }
 
-    def _get_length_clustering_figures(self) -> Dict[str, plt.Figure]:
+    def _get_length_clustering_figures(self) -> Dict[str, mlp_figure.Figure]:
         """Generates figures showing clustering with respect to review length."""
 
         fig, axes = plt.subplots(2, figsize=(8, 12))
@@ -219,10 +220,10 @@ class EDAFeatureExtractor:
             'clustering_words_vs_sentences': fig
         }
 
-    def _get_distribution_figures(self) -> Dict[str, plt.Figure]:
+    def _get_distribution_figures(self) -> Dict[str, mlp_figure.Figure]:
         """Generates distribution figures for EDA."""
 
-        figures: Dict[str, plt.Figure] = {}
+        figures: Dict[str, mlp_figure.Figure] = {}
 
         figures['review_rating_distribution'] = self._get_rating_distribution_figure()
 
@@ -267,7 +268,7 @@ class EDAFeatureExtractor:
 
         return figures
 
-    def _get_rating_distribution_figure(self) -> plt.Figure:
+    def _get_rating_distribution_figure(self) -> mlp_figure.Figure:
         """Generates review rating distribution figures."""
 
         fig, axes = plt.subplots(3, figsize=(8, 18))
@@ -309,10 +310,10 @@ class EDAFeatureExtractor:
 
         return fig
 
-    def _get_velocity_volume_figures(self) -> Dict[str, plt.Figure]:
+    def _get_velocity_volume_figures(self) -> Dict[str, mlp_figure.Figure]:
         """Generates velocity and volume clustering figures for EDA."""
 
-        figures: Dict[str, plt.Figure] = {}
+        figures: Dict[str, mlp_figure.Figure] = {}
 
         chunk_infos = self._get_vol_vel_chunk_infos()
 
@@ -388,7 +389,7 @@ class EDAFeatureExtractor:
 
         def get_bbow_nzero(bbow_path: str) -> int:
             bbow = torch.load(bbow_path)
-            return bbow.indices().size(1)
+            return int(bbow.indices().size(1))
 
         sizes_df = self._paths_df.copy()
 
