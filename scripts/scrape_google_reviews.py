@@ -4,10 +4,14 @@ import json
 import logging
 import pathlib
 import sys
+from typing import List
+import asyncio
 
 import hydra
 import omegaconf
-import tqdm
+from playwright.sync_api import sync_playwright, ProxySettings as SyncProxySettings
+from playwright.async_api import async_playwright, ProxySettings as AsyncProxySettings
+from playwright.async_api import BrowserContext as AsyncBrowserContext
 
 from advanced_data_mining.data.scraping import maps_browser
 from advanced_data_mining.data import raw_ds
@@ -24,10 +28,11 @@ def _name_to_valid_path(name: str) -> str:
     return ''.join(keep).strip().replace(' ', '_')
 
 
-def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
-                                   location: raw_ds.Restaurant,
-                                   output_dir: pathlib.Path) -> None:
-    """Scrapes reviews for a given restaurant and saves them to a file."""
+async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
+                                         location: raw_ds.Restaurant,
+                                         output_dir: pathlib.Path,
+                                         browser_context: AsyncBrowserContext) -> None:
+    """Scrapes reviews for a given restaurant."""
 
     output_path = output_dir / f'{_name_to_valid_path(location.name)}.json'
 
@@ -39,9 +44,12 @@ def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
 
     _logger().info('Scraping reviews for location: %s', location.name)
 
+    page = await browser_context.new_page()
+    page.set_default_timeout(2000)
+
     reviews = [review.model_dump()
-               for review
-               in tqdm.tqdm(scraper.scrape_reviews_for(location), unit='review', desc='Reviews')]
+               async for review
+               in scraper.scrape_reviews_for(location, page)]
 
     if not reviews:
         _logger().error('No reviews found for location: %s', location.name)
@@ -62,6 +70,31 @@ def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
         json.dump(payload, f, ensure_ascii=False, indent=4)
 
 
+async def _scrape_reviews_for_restaurants(scraper: maps_browser.MapsBrowser,
+                                          proxy_cfg: AsyncProxySettings,
+                                          locations: List[raw_ds.Restaurant],
+                                          output_dir: pathlib.Path) -> None:
+    """Scrapes reviews for a given restaurant and saves them to a file."""
+
+    async with async_playwright() as async_pw:
+        browser = await async_pw.firefox.launch(
+            headless=True,
+            proxy=proxy_cfg
+        )
+        browser_context = await browser.new_context(
+            locale='en-US',
+            extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+        )
+
+        tasks = [asyncio.create_task(_scrape_reviews_for_restaurant(scraper,
+                                                                    location,
+                                                                    output_dir,
+                                                                    browser_context))
+                 for location in locations]
+
+        await asyncio.gather(*tasks)
+
+
 @hydra.main(version_base=None, config_path='cfg', config_name='scrape_google_reviews')
 def main(script_cfg: omegaconf.DictConfig) -> None:
     """Scrapes Google Maps reviews for locations matching specified queries."""
@@ -75,11 +108,6 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
         sys.exit(1)
 
     scraper = maps_browser.MapsBrowser(
-        proxy_cfg={
-            'server': script_cfg.proxy.server,
-            'username': script_cfg.proxy.username,
-            'password': script_cfg.proxy.password,
-        },
         max_reviews_per_restaurant=script_cfg.max_reviews_per_restaurant,
         max_restaurants_per_location=script_cfg.max_restaurants_per_location,
     )
@@ -94,7 +122,23 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
     for primary_loc, secondary_loc in location_pairs:
         _logger().info('Starting scraping for location: %s %s', primary_loc, secondary_loc)
 
-        locations = list(scraper.get_locations_by_query(primary_loc, secondary_loc))
+        with sync_playwright() as sync_pw:
+            browser = sync_pw.firefox.launch(
+                headless=True,
+                proxy=SyncProxySettings(
+                    server=script_cfg.proxy.server,
+                    username=script_cfg.proxy.get('username'),
+                    password=script_cfg.proxy.get('password'),
+                ),
+            )
+            page = browser.new_context(
+                locale='en-US',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+            ).new_page()
+
+            locations = list(scraper.get_locations_by_query(primary_loc, secondary_loc, page))
+
+            browser.close()
 
         if not locations:
             _logger().warning('No locations found for location: %s %s', primary_loc, secondary_loc)
@@ -108,13 +152,16 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
                             _name_to_valid_path(secondary_loc))
         query_output_dir.mkdir(parents=True, exist_ok=True)
 
-        for loc in locations:
-
-            _scrape_reviews_for_restaurant(
-                scraper=scraper,
-                location=loc,
-                output_dir=query_output_dir,
-            )
+        asyncio.run(_scrape_reviews_for_restaurants(
+            scraper=scraper,
+            proxy_cfg=AsyncProxySettings(
+                server=script_cfg.proxy.server,
+                username=script_cfg.proxy.get('username'),
+                password=script_cfg.proxy.get('password'),
+            ),
+            locations=locations,
+            output_dir=query_output_dir,
+        ))
 
 
 if __name__ == '__main__':

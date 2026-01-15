@@ -4,10 +4,10 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Iterator
+from typing import AsyncIterator
 
-from playwright.sync_api import Locator
-from playwright.sync_api import Page
+from playwright.async_api import Locator
+from playwright.async_api import Page
 
 from advanced_data_mining.data.raw_ds import Review
 
@@ -73,73 +73,83 @@ class ReviewTexts:
 class ReviewsExtractor:
     """Extracts reviews from Google Maps restaurant page."""
 
-    def __init__(self, page: Page, max_reviews: int) -> None:
+    _REVIEWS_SCROLL_RETRIES = 5
 
-        self._max_reviews = max_reviews
-        self._reviews_scroll_retries = 5
+    @classmethod
+    async def create(cls, page: Page, max_reviews: int) -> 'ReviewsExtractor':
+        """Spawns the extractor and prepares the page for review extraction."""
 
-        self._open_more_reviews(page)
-        self._scroll_reviews_to_end(page)
+        await ReviewsExtractor._open_more_reviews(page)
+        await ReviewsExtractor._scroll_reviews_to_end(page, max_reviews)
 
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR).first
-        self._review_divs = side_panel.locator(_REVIEW_SELECTOR)
+        review_divs = side_panel.locator(_REVIEW_SELECTOR)
 
-    @property
-    def n_reviews(self) -> int:
+        return ReviewsExtractor(review_divs, max_reviews)
+
+    def __init__(self, review_divs: Locator, max_reviews: int) -> None:
+
+        self._review_divs = review_divs
+        self._max_reviews = max_reviews
+
+    async def get_n_reviews(self) -> int:
         """Returns the number of reviews extracted from the page."""
-        return self._review_divs.count()
+        return await self._review_divs.count()
 
-    def iter_reviews(self) -> Iterator[Review]:
+    async def iter_reviews(self) -> AsyncIterator[Review]:
         """Yields the extracted reviews one by one."""
 
-        n_reviews_to_take = min(self._review_divs.count(), self._max_reviews)
+        n_reviews_to_take = min(await self._review_divs.count(), self._max_reviews)
 
         for i in range(n_reviews_to_take):
             review_div = self._review_divs.nth(i)
+
             try:
-                review = self._extract_review(review_div)
+                review = await self._extract_review(review_div)
                 if review is not None:
                     yield review
+
             except Exception as exc:  # pylint: disable=broad-except
                 _logger().error('Failed to extract review: %s', exc)
 
-    def _open_more_reviews(self, page: Page) -> None:
+    @staticmethod
+    async def _open_more_reviews(page: Page) -> None:
         button = page.locator('button:has-text("More reviews")')
-        if button.count() == 0:
+        if await button.count() == 0:
             return
         try:
-            button.first.click(timeout=4000)
-            page.wait_for_timeout(2000)
+            await button.first.click(timeout=4000)
+            await page.wait_for_timeout(2000)
         except Exception as exc:  # pylint: disable=broad-except
             _logger().debug('Failed to click More reviews button: %s', exc)
 
-    def _scroll_reviews_to_end(self, page: Page) -> None:
+    @staticmethod
+    async def _scroll_reviews_to_end(page: Page, max_reviews: int) -> None:
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR)
-        if side_panel.count() == 0:
+        if await side_panel.count() == 0:
             _logger().critical('Cannot find reviews side panel!')
             return
 
-        side_panel = side_panel.first
-        review_divs = side_panel.locator(_REVIEW_SELECTOR)
+        review_divs = side_panel.first.locator(_REVIEW_SELECTOR)
+        review_divs_count = await review_divs.count()
 
-        if review_divs.count() == 0:
+        if review_divs_count == 0:
             _logger().warning('No reviews found in the side panel!')
             return
 
-        review_divs_count = review_divs.count()
-        retries_left = self._reviews_scroll_retries
+        retries_left = ReviewsExtractor._REVIEWS_SCROLL_RETRIES
 
         while review_divs_count > 0:
-            if review_divs_count >= self._max_reviews:
+            if review_divs_count >= max_reviews:
                 return
 
-            page.evaluate(
-                '(el) => el.scrollTop = el.scrollHeight', side_panel.element_handle()
+            await page.evaluate(
+                '(el) => el.scrollTop = el.scrollHeight', await side_panel.element_handle()
             )
-            page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1000)
 
-            review_divs = side_panel.locator(_REVIEW_SELECTOR)
-            new_count = review_divs.count()
+            review_divs = side_panel.first.locator(_REVIEW_SELECTOR)
+            new_count = await review_divs.count()
 
             _logger().debug(
                 'Scrolled reviews panel, found %d reviews so far.', new_count
@@ -151,20 +161,20 @@ class ReviewsExtractor:
                     continue
                 break
 
-            retries_left = self._reviews_scroll_retries
+            retries_left = ReviewsExtractor._REVIEWS_SCROLL_RETRIES
             review_divs_count = new_count
 
-    def _extract_review(self, review_div: Locator) -> Review | None:
+    async def _extract_review(self, review_div: Locator) -> Review | None:
         more_btn = review_div.locator('button.w8nwRe.kyuRq')
-        if more_btn.count() > 0:
+        if await more_btn.count() > 0:
             try:
-                more_btn.first.click(timeout=800)
-                review_div.page.wait_for_timeout(120)
+                await more_btn.first.click(timeout=800)
+                await review_div.page.wait_for_timeout(120)
             except TimeoutError:  # pylint: disable=broad-except
                 pass
 
-        rating = self._extract_rating(review_div.locator('span.kvMYJc').first)
-        texts = self._extract_texts(review_div)
+        rating = await self._extract_rating(review_div.locator('span.kvMYJc').first)
+        texts = await self._extract_texts(review_div)
 
         if not _has_meaningful_text(texts.translated):
             _logger().debug('Skipping review with no meaningful text: %s', texts.translated)
@@ -181,21 +191,21 @@ class ReviewsExtractor:
             original=texts.original.strip() if texts.is_translated else '',
         )
 
-    def _extract_texts(self, review_div: Locator) -> ReviewTexts:
-        text_spans = self._read_review_spans(review_div)
+    async def _extract_texts(self, review_div: Locator) -> ReviewTexts:
+        text_spans = await self._read_review_spans(review_div)
         translated_text = text_spans[0] if text_spans else ''
 
-        dataset = review_div.evaluate('el => el.dataset || {}') or {}
+        dataset = await review_div.evaluate('el => el.dataset || {}') or {}
         dataset_original = ''
         if isinstance(dataset, dict):
             dataset_original = (dataset.get('originalReviewText') or '').strip()
 
-        has_marker = review_div.locator(_TRANSLATED_MARKER_SELECTOR).count() > 0
+        has_marker = await review_div.locator(_TRANSLATED_MARKER_SELECTOR).count() > 0
         is_translated = bool(has_marker or dataset_original)
 
         original_text = dataset_original
         if has_marker and not original_text:
-            original_text = self._reveal_original(review_div)
+            original_text = await self._reveal_original(review_div)
 
         if not original_text and len(text_spans) > 1:
             original_text = text_spans[-1]
@@ -207,27 +217,27 @@ class ReviewsExtractor:
         )
         return texts
 
-    def _reveal_original(self, review_div: Locator) -> str:
+    async def _reveal_original(self, review_div: Locator) -> str:
         for selector in _SHOW_ORIGINAL_SELECTORS:
             button = review_div.locator(selector)
-            if button.count() == 0:
+            if await button.count() == 0:
                 continue
 
             try:
-                button.first.click(timeout=1000)
-                review_div.page.wait_for_timeout(300)
-                refreshed = self._read_review_spans(review_div)
+                await button.first.click(timeout=1000)
+                await review_div.page.wait_for_timeout(300)
+                refreshed = await self._read_review_spans(review_div)
                 if refreshed:
                     return refreshed[-1]
             except Exception as exc:  # pylint: disable=broad-except
                 _logger().debug('Failed to click "%s": %s', selector, exc)
         return ''
 
-    def _read_review_spans(self, review_div: Locator) -> list[str]:
-        spans = review_div.locator('span.wiI7pd').all_inner_texts()
+    async def _read_review_spans(self, review_div: Locator) -> list[str]:
+        spans = await review_div.locator('span.wiI7pd').all_inner_texts()
         return [text.strip() for text in spans if text and text.strip()]
 
-    def _extract_rating(self, stars_span: Locator) -> float:
-        aria = stars_span.get_attribute('aria-label') or ''
+    async def _extract_rating(self, stars_span: Locator) -> float:
+        aria = await stars_span.get_attribute('aria-label') or ''
         isolated_num = re.search(r'[\d]+', aria)
         return float(isolated_num.group(0)) if isolated_num else 0.0
