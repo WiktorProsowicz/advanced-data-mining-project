@@ -66,7 +66,7 @@ def _get_logging_config(script_signature: str,
         'handlers': {
             'console_hand': {
                 'class': 'logging.StreamHandler',
-                'level': 'NOTSET',
+                'level': 'INFO',
                 'formatter': 'color_formatter',
                 'stream': 'ext://sys.stdout',
             },
@@ -81,7 +81,7 @@ def _get_logging_config(script_signature: str,
         'formatters': {
             'color_formatter': {
                 '()': _ColorFormatter,
-                'format': '[%(asctime)s] [%(levelname)s] %(message)s',
+                'format': '[%(asctime)s][%(levelname)s][%(name)s] %(message)s',
                 'datefmt': '%Y-%m-%d %H:%M:%S',
             },
             'default_formatter': {
