@@ -43,7 +43,7 @@ def _has_meaningful_text(text: str) -> bool:
 
 def _long_enough(text: str) -> bool:
     tokens = re.findall(r'\w+', text, flags=re.UNICODE)
-    return len(tokens) >= 2 or len(_normalize_text(text)) >= 10
+    return len(tokens) >= 1
 
 
 @dataclass
@@ -235,7 +235,7 @@ class ReviewsExtractor:
         name = await name_locator.first.inner_text()
         stats = await stats_locator.first.inner_text()
 
-        match = re.match(r'(\d+)\s+reviews?', stats)
+        match = re.search(r'(\d+)\s+reviews?', stats)
         n_reviews = int(match.group(1)) if match else None
 
         return Author(
