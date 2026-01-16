@@ -37,7 +37,7 @@ class MapsBrowser:
         """
 
         try:
-            page.goto('https://www.google.com/maps', timeout=10000)
+            page.goto('https://www.google.com/maps')
 
         except Exception as exc:  # pylint: disable=broad-except
             _logger().error('Failed to open Google Maps: %s', exc)
@@ -61,7 +61,7 @@ class MapsBrowser:
         """Yield reviews for a single location page."""
 
         try:
-            await page.goto(location.href, timeout=10000)
+            await page.goto(location.href)
 
         except Exception as exc:  # pylint: disable=broad-except
             _logger().error(

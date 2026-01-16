@@ -45,7 +45,7 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
     _logger().info('Scraping reviews for location: %s', location.name)
 
     page = await browser_context.new_page()
-    page.set_default_timeout(2000)
+    page.set_default_timeout(40000)
 
     reviews = [review.model_dump()
                async for review

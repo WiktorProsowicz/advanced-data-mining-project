@@ -127,22 +127,27 @@ class ReviewsExtractor:
 
     @staticmethod
     async def _scroll_reviews_to_end(page: Page, max_reviews: int) -> None:
+
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR)
-        if await side_panel.count() == 0:
-            _logger().critical('Cannot find reviews side panel!')
+
+        try:
+            await side_panel.wait_for()
+        except Exception:  # pylint: disable=broad-except
+            _logger().error('Reviews side panel did not load in time!')
             return
 
         review_divs = side_panel.first.locator(_REVIEW_SELECTOR)
-        await page.wait_for_timeout(1000)
-        review_divs_count = await review_divs.count()
 
-        if review_divs_count == 0:
-            _logger().warning('No reviews found in the side panel!')
+        try:
+            await review_divs.first.wait_for()
+        except Exception:  # pylint: disable=broad-except
+            _logger().error('Review divs did not load in time!')
             return
 
+        review_divs_count = await review_divs.count()
         retries_left = ReviewsExtractor._REVIEWS_SCROLL_RETRIES
 
-        while review_divs_count > 0:
+        while retries_left > 0:
             if review_divs_count >= max_reviews:
                 return
 
@@ -158,14 +163,12 @@ class ReviewsExtractor:
                 'Scrolled reviews panel, found %d reviews so far.', new_count
             )
 
-            if new_count == review_divs_count:
-                if retries_left > 0:
-                    retries_left -= 1
-                    continue
-                break
+            if new_count <= review_divs_count:
+                retries_left -= 1
 
-            retries_left = ReviewsExtractor._REVIEWS_SCROLL_RETRIES
-            review_divs_count = new_count
+            else:
+                retries_left = ReviewsExtractor._REVIEWS_SCROLL_RETRIES
+                review_divs_count = new_count
 
     async def _extract_review(self, review_div: Locator) -> Review | None:
         more_btn = review_div.locator('button.w8nwRe.kyuRq')
