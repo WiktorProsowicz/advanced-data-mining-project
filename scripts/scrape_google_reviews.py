@@ -31,7 +31,8 @@ def _name_to_valid_path(name: str) -> str:
 async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
                                          location: raw_ds.Restaurant,
                                          output_dir: pathlib.Path,
-                                         browser_context: AsyncBrowserContext) -> None:
+                                         browser_context: AsyncBrowserContext,
+                                         scraping_cfg: omegaconf.DictConfig) -> None:
     """Scrapes reviews for a given restaurant."""
 
     output_path = output_dir / f'{_name_to_valid_path(location.name)}.json'
@@ -45,7 +46,7 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
     _logger().info('Scraping reviews for location: %s', location.name)
 
     page = await browser_context.new_page()
-    page.set_default_timeout(40000)
+    page.set_default_timeout(scraping_cfg.default_max_loading_timeout)
 
     reviews = [review.model_dump()
                async for review
@@ -73,7 +74,9 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
 async def _scrape_reviews_for_restaurants(scraper: maps_browser.MapsBrowser,
                                           proxy_cfg: AsyncProxySettings,
                                           locations: List[raw_ds.Restaurant],
-                                          output_dir: pathlib.Path) -> None:
+                                          output_dir: pathlib.Path,
+                                          scraping_cfg: omegaconf.DictConfig
+                                          ) -> None:
     """Scrapes reviews for a given restaurant and saves them to a file."""
 
     async with async_playwright() as async_pw:
@@ -86,12 +89,14 @@ async def _scrape_reviews_for_restaurants(scraper: maps_browser.MapsBrowser,
             extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
         )
 
-        for locations_batch in (locations[i:i + 5] for i in range(0, len(locations), 5)):
+        for locations_batch in (locations[i:i + scraping_cfg.batch_size]
+                                for i in range(0, len(locations), scraping_cfg.batch_size)):
 
             tasks = [asyncio.create_task(_scrape_reviews_for_restaurant(scraper,
                                                                         location,
                                                                         output_dir,
-                                                                        browser_context))
+                                                                        browser_context,
+                                                                        scraping_cfg))
                      for location in locations_batch]
 
             await asyncio.gather(*tasks)
@@ -112,8 +117,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
         sys.exit(1)
 
     scraper = maps_browser.MapsBrowser(
-        max_reviews_per_restaurant=script_cfg.max_reviews_per_restaurant,
-        max_restaurants_per_location=script_cfg.max_restaurants_per_location,
+        max_reviews_per_restaurant=script_cfg.scraping_cfg.max_reviews_per_restaurant,
+        max_restaurants_per_location=script_cfg.scraping_cfg.max_restaurants_per_location,
     )
 
     output_dir = pathlib.Path(script_cfg.output_dir)
@@ -165,6 +170,7 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
             ),
             locations=locations,
             output_dir=query_output_dir,
+            scraping_cfg=script_cfg.scraping_cfg,
         ))
 
 

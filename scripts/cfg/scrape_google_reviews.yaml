@@ -8,4 +8,8 @@ google_maps_queries:
     - kraków rynek kebab
     - kraków krowodrza kebab
 output_dir: tmp/reviews
-max_reviews_per_restaurant: 300
+scraping_cfg:
+  max_reviews_per_restaurant: 200
+  max_restaurants_per_location: 30
+  batch_size: 5
+  default_max_loading_timeout: 40000
