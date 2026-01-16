@@ -93,6 +93,8 @@ class ReviewsExtractor:
 
     @staticmethod
     async def _open_more_reviews(page: Page) -> None:
+        """Opens the scrollable reviews panel to enable scraping all reviews."""
+
         button = page.locator('button:has-text("More reviews")')
         if await button.count() == 0:
             return
@@ -104,6 +106,10 @@ class ReviewsExtractor:
 
     @staticmethod
     async def _scroll_reviews_to_end(page: Page, max_reviews: int) -> None:
+        """Scrolls the review panel until new reviews stop loading in reasonable time.
+
+        If the number of loaded reviews reaches `max_reviews`, scrolling stops earlier.
+        """
 
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR)
 
@@ -148,6 +154,8 @@ class ReviewsExtractor:
                 review_divs_count = new_count
 
     async def _extract_review(self, review_div: Locator) -> Review | None:
+        """Extracts a single review from its div element."""
+
         more_btn = review_div.locator('button.w8nwRe.kyuRq')
         if await more_btn.count() > 0:
             try:
@@ -176,6 +184,8 @@ class ReviewsExtractor:
         )
 
     async def _extract_main_review_texts(self, review_div: Locator) -> Tuple[str, str | None]:
+        """Extracts the main translated and original review texts from a review div."""
+
         text_spans = await self._read_review_spans(review_div)
 
         translated_text = text_spans[0] if text_spans else ''
@@ -199,6 +209,7 @@ class ReviewsExtractor:
         return translated_text, original_text
 
     async def _extract_author(self, review_div: Locator) -> Author:
+        """Extracts the author information from a review div."""
 
         name_locator = review_div.locator(_AUTHOR_NAME_SELECTOR)
         stats_locator = review_div.locator(_AUTHOR_STATS_SELECTOR)
@@ -219,6 +230,11 @@ class ReviewsExtractor:
         )
 
     async def _extract_categorized_opinions(self, review_div: Locator) -> Optional[Dict[str, str]]:
+        """Extracts the listed categorized opinions from a review div, if available.
+
+        Categorized opinions are formatted texts placed below the main review text,
+        usually in the form of "Food: Excellent", "Service: Poor", etc.
+        """
 
         category_divs = review_div.locator('div.PBK6be')
 
@@ -243,6 +259,8 @@ class ReviewsExtractor:
         return categorized_opinions
 
     async def _reveal_original(self, review_div: Locator) -> str:
+        """Triggers the "Show original" button to reveal the original review text."""
+
         for selector in _SHOW_ORIGINAL_SELECTORS:
             button = review_div.locator(selector)
             if await button.count() == 0:
@@ -259,10 +277,14 @@ class ReviewsExtractor:
         return ''
 
     async def _read_review_spans(self, review_div: Locator) -> list[str]:
+        """Reads all textual spans from the main review text area."""
+
         spans = await review_div.locator('span.wiI7pd').all_inner_texts()
         return [text.strip() for text in spans if text and text.strip()]
 
     async def _extract_rating(self, stars_span: Locator) -> float:
+        """Extracts the rating value from the stars span element."""
+
         aria = await stars_span.get_attribute('aria-label') or ''
         isolated_num = re.search(r'[\d]+', aria)
         return float(isolated_num.group(0)) if isolated_num else 0.0
