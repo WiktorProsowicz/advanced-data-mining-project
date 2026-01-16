@@ -4,7 +4,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import AsyncIterator, Dict, Optional
+from typing import AsyncIterator, Dict, Optional, Tuple
 
 from playwright.async_api import Locator
 from playwright.async_api import Page
@@ -28,12 +28,14 @@ _AUTHOR_STATS_SELECTOR = 'button.al6Kxe div.RfnDt'
 
 
 def _normalize_text(text: str) -> str:
+    """Performs Unicode normalization."""
     normalized = unicodedata.normalize('NFKC', text or '')
     normalized = re.sub(r'\s+', ' ', normalized).strip()
     return normalized.casefold()
 
 
 def _has_meaningful_text(text: str) -> bool:
+    """Tells if the text contain any content worth processing."""
     if not text:
         return False
     has_letter = re.search(r'[A-Za-zÀ-ž]', text) is not None
@@ -41,35 +43,10 @@ def _has_meaningful_text(text: str) -> bool:
     return has_letter and alnum_len >= 3
 
 
-def _long_enough(text: str) -> bool:
+def _has_at_least_one_word(text: str) -> bool:
+    """Tells if the text contains at least one word."""
     tokens = re.findall(r'\w+', text, flags=re.UNICODE)
     return len(tokens) >= 1
-
-
-@dataclass
-class ReviewTexts:
-    """Holds the textual fragments extracted from a review block.
-
-    The `is_translated` flag is guaranteed to be consistent with the presence of the
-    `original` text, i.e. the original is not empty
-    """
-
-    is_translated: bool
-    translated: str
-    original: str
-
-    def __init__(self, is_translated: bool, translated: str, original: str) -> None:
-
-        self.is_translated = is_translated
-        self.translated = translated
-        self.original = original
-
-        if not is_translated:
-            self.original = ''
-
-        elif _normalize_text(self.translated) == _normalize_text(self.original):
-            self.is_translated = False
-            self.original = ''
 
 
 class ReviewsExtractor:
@@ -180,49 +157,46 @@ class ReviewsExtractor:
                 pass
 
         rating = await self._extract_rating(review_div.locator('span.kvMYJc').first)
-        texts = await self._extract_texts(review_div)
+        translated_txt, original_txt = await self._extract_main_review_texts(review_div)
 
-        if not _has_meaningful_text(texts.translated):
-            _logger().debug('Skipping review with no meaningful text: %s', texts.translated)
+        if not _has_meaningful_text(translated_txt):
+            _logger().debug('Skipping review with no meaningful text: %s', translated_txt)
             return None
 
-        if not _long_enough(texts.translated):
-            _logger().debug('Skipping review with too short text: %s', texts.translated)
+        if not _has_at_least_one_word(translated_txt):
+            _logger().debug('Skipping review with too short text: %s', translated_txt)
             return None
 
         return Review(
-            text=texts.translated.strip(),
+            text=translated_txt.strip(),
             rating=rating,
-            original=texts.original.strip() if texts.is_translated else None,
+            original=original_txt.strip() if original_txt else None,
             author=await self._extract_author(review_div),
             categorized_opinions=await self._extract_categorized_opinions(review_div)
         )
 
-    async def _extract_texts(self, review_div: Locator) -> ReviewTexts:
+    async def _extract_main_review_texts(self, review_div: Locator) -> Tuple[str, str | None]:
         text_spans = await self._read_review_spans(review_div)
+
         translated_text = text_spans[0] if text_spans else ''
+        original_text = None
 
         dataset = await review_div.evaluate('el => el.dataset || {}') or {}
-        dataset_original = ''
         if isinstance(dataset, dict):
-            dataset_original = (dataset.get('originalReviewText') or '').strip()
+            original_text = (dataset.get('originalReviewText') or '').strip()
 
         has_marker = await review_div.locator(_TRANSLATED_MARKER_SELECTOR).count() > 0
-        is_translated = bool(has_marker or dataset_original)
 
-        original_text = dataset_original
-        if has_marker and not original_text:
+        if not original_text and has_marker:
             original_text = await self._reveal_original(review_div)
 
         if not original_text and len(text_spans) > 1:
             original_text = text_spans[-1]
 
-        texts = ReviewTexts(
-            is_translated=is_translated,
-            translated=translated_text,
-            original=original_text,
-        )
-        return texts
+        if _normalize_text(translated_text) == _normalize_text(original_text or ''):
+            original_text = None
+
+        return translated_text, original_text
 
     async def _extract_author(self, review_div: Locator) -> Author:
 
