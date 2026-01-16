@@ -35,6 +35,7 @@ class Review(pydantic.BaseModel):
     original: Optional[str]
     rating: float
     author: Author
+    categorized_opinions: Optional[Dict[str, str]]
 
 
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]

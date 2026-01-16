@@ -4,7 +4,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, Dict, Optional
 
 from playwright.async_api import Locator
 from playwright.async_api import Page
@@ -195,6 +195,7 @@ class ReviewsExtractor:
             rating=rating,
             original=texts.original.strip() if texts.is_translated else None,
             author=await self._extract_author(review_div),
+            categorized_opinions=await self._extract_categorized_opinions(review_div)
         )
 
     async def _extract_texts(self, review_div: Locator) -> ReviewTexts:
@@ -242,6 +243,30 @@ class ReviewsExtractor:
             name=name.strip(),
             n_reviews=n_reviews,
         )
+
+    async def _extract_categorized_opinions(self, review_div: Locator) -> Optional[Dict[str, str]]:
+
+        category_divs = review_div.locator('div.PBK6be')
+
+        n_categories = await category_divs.count()
+
+        if n_categories == 0:
+            return None
+
+        categorized_opinions: Dict[str, str] = {}
+
+        for i in range(n_categories):
+            kv_spans = category_divs.nth(i).locator('span.RfDO5c')
+
+            if await kv_spans.count() != 2:
+                continue
+
+            key = await kv_spans.nth(0).inner_text()
+            value = await kv_spans.nth(1).inner_text()
+
+            categorized_opinions[key.strip()] = value.strip()
+
+        return categorized_opinions
 
     async def _reveal_original(self, review_div: Locator) -> str:
         for selector in _SHOW_ORIGINAL_SELECTORS:
