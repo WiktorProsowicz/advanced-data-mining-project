@@ -86,13 +86,17 @@ async def _scrape_reviews_for_restaurants(scraper: maps_browser.MapsBrowser,
             extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
         )
 
-        tasks = [asyncio.create_task(_scrape_reviews_for_restaurant(scraper,
-                                                                    location,
-                                                                    output_dir,
-                                                                    browser_context))
-                 for location in locations]
+        for locations_batch in (locations[i:i + 5] for i in range(0, len(locations), 5)):
 
-        await asyncio.gather(*tasks)
+            tasks = [asyncio.create_task(_scrape_reviews_for_restaurant(scraper,
+                                                                        location,
+                                                                        output_dir,
+                                                                        browser_context))
+                     for location in locations_batch]
+
+            await asyncio.gather(*tasks)
+
+        await browser.close()
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='scrape_google_reviews')
@@ -127,8 +131,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
                 headless=True,
                 proxy=SyncProxySettings(
                     server=script_cfg.proxy.server,
-                    username=script_cfg.proxy.get('username'),
-                    password=script_cfg.proxy.get('password'),
+                    username=script_cfg.proxy.username,
+                    password=script_cfg.proxy.password,
                 ),
             )
             page = browser.new_context(
@@ -156,8 +160,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
             scraper=scraper,
             proxy_cfg=AsyncProxySettings(
                 server=script_cfg.proxy.server,
-                username=script_cfg.proxy.get('username'),
-                password=script_cfg.proxy.get('password'),
+                username=script_cfg.proxy.username,
+                password=script_cfg.proxy.password,
             ),
             locations=locations,
             output_dir=query_output_dir,
