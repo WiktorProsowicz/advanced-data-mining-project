@@ -6,6 +6,7 @@ import pathlib
 import sys
 from typing import List
 import asyncio
+import random
 
 import hydra
 import omegaconf
@@ -127,6 +128,7 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
     location_pairs = [(primary_loc, secondary_loc)
                       for primary_loc, secondary_locs in script_cfg.google_maps_queries.items()
                       for secondary_loc in secondary_locs]
+    random.shuffle(location_pairs)
 
     for primary_loc, secondary_loc in location_pairs:
         _logger().info('Starting scraping for location: %s %s', primary_loc, secondary_loc)
