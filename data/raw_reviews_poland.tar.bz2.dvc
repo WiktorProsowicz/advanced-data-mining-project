@@ -1,0 +1,5 @@
+outs:
+- md5: bd3f97977f9705452705d1ff66e4345f
+  size: 33449973
+  hash: md5
+  path: raw_reviews_poland.tar.bz2
