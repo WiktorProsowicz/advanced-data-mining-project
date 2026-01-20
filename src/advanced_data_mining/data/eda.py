@@ -188,7 +188,7 @@ class EDAFeatureExtractor:
     def _get_length_clustering_figures(self) -> Dict[str, mlp_figure.Figure]:
         """Generates figures showing clustering with respect to review length."""
 
-        fig, axes = plt.subplots(2, figsize=(8, 12))
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
         chosen_reviews = self._numerical_stats.sample(n=min(1000, len(self._numerical_stats)))
 
@@ -230,7 +230,7 @@ class EDAFeatureExtractor:
         threshold = self._numerical_stats['num_words'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_words'] < threshold]
 
-        fig, axes = plt.subplots(5, figsize=(8, 25))
+        fig, axes = plt.subplots(1, 5, figsize=(30, 6))
 
         for i, rating in enumerate(range(1, 6)):
             ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
@@ -244,7 +244,7 @@ class EDAFeatureExtractor:
         threshold = self._numerical_stats['num_sentences'].quantile(0.95)
         chosen_reviews = self._numerical_stats[self._numerical_stats['num_sentences'] < threshold]
 
-        fig, axes = plt.subplots(5, figsize=(8, 25))
+        fig, axes = plt.subplots(1, 5, figsize=(30, 6))
 
         for i, rating in enumerate(range(1, 6)):
             ratings = chosen_reviews[chosen_reviews['review_rating'] == rating]
@@ -255,7 +255,7 @@ class EDAFeatureExtractor:
 
         figures['num_sentences_distribution'] = fig
 
-        fig, axes = plt.subplots(3, figsize=(8, 18))
+        fig, axes = plt.subplots(1, 3, figsize=(25, 6))
 
         for i, bow_type in enumerate(['top', 'bottom', 'full']):
             axes[i].hist(self._bow_nzero_df[bow_type], bins=100, color='purple')
@@ -271,7 +271,7 @@ class EDAFeatureExtractor:
     def _get_rating_distribution_figure(self) -> mlp_figure.Figure:
         """Generates review rating distribution figures."""
 
-        fig, axes = plt.subplots(3, figsize=(8, 18))
+        fig, axes = plt.subplots(1, 3, figsize=(18, 8))
 
         axes[0].hist(
             self._ds['review_rating'], bins=5, range=(1, 6),
@@ -317,9 +317,9 @@ class EDAFeatureExtractor:
 
         chunk_infos = self._get_vol_vel_chunk_infos()
 
-        fig, axes = plt.subplots(len(chunk_infos), 3, figsize=(12, 6 * len(chunk_infos)))
+        for chunk_length, chunk_size in chunk_infos:
 
-        for i, (chunk_length, chunk_size) in enumerate(chunk_infos):
+            fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
             vel_col = f'trace_velocity_cl_{chunk_length}_sz_{chunk_size}'
             vol_col = f'trace_volume_cl_{chunk_length}_sz_{chunk_size}'
@@ -334,41 +334,41 @@ class EDAFeatureExtractor:
             chosen_reviews = chosen_reviews.sample(n=min(1000, len(chosen_reviews)))
 
             for rating in range(1, 6):
-                axes[i, 0].scatter(
+                axes[0].scatter(
                     chosen_reviews[vel_col][chosen_reviews['review_rating'] == rating],
                     chosen_reviews[vol_col][chosen_reviews['review_rating'] == rating],
                     alpha=0.5,
                     label=f'Rating {rating}'
                 )
 
-            axes[i, 0].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
-            axes[i, 0].set_xlabel('Trace Velocity')
-            axes[i, 0].set_ylabel('Trace Volume')
-            axes[i, 0].legend()
+            axes[0].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
+            axes[0].set_xlabel('Trace Velocity')
+            axes[0].set_ylabel('Trace Volume')
+            axes[0].legend()
 
-            axes[i, 1].scatter(chosen_reviews[vel_col][chosen_reviews['is_from_cracow']],
-                               chosen_reviews[vol_col][chosen_reviews['is_from_cracow']],
-                               alpha=0.5, label='From Cracow')
-            axes[i, 1].scatter(chosen_reviews[vel_col][~chosen_reviews['is_from_cracow']],
-                               chosen_reviews[vol_col][~chosen_reviews['is_from_cracow']],
-                               alpha=0.5, label='From Warsaw')
-            axes[i, 1].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
-            axes[i, 1].set_xlabel('Trace Velocity')
-            axes[i, 1].set_ylabel('Trace Volume')
-            axes[i, 1].legend()
+            axes[1].scatter(chosen_reviews[vel_col][chosen_reviews['is_from_cracow']],
+                            chosen_reviews[vol_col][chosen_reviews['is_from_cracow']],
+                            alpha=0.5, label='From Cracow')
+            axes[1].scatter(chosen_reviews[vel_col][~chosen_reviews['is_from_cracow']],
+                            chosen_reviews[vol_col][~chosen_reviews['is_from_cracow']],
+                            alpha=0.5, label='From Warsaw')
+            axes[1].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
+            axes[1].set_xlabel('Trace Velocity')
+            axes[1].set_ylabel('Trace Volume')
+            axes[1].legend()
 
-            axes[i, 2].scatter(chosen_reviews[vel_col][chosen_reviews['is_translated']],
-                               chosen_reviews[vol_col][chosen_reviews['is_translated']],
-                               alpha=0.5, label='Translated')
-            axes[i, 2].scatter(chosen_reviews[vel_col][~chosen_reviews['is_translated']],
-                               chosen_reviews[vol_col][~chosen_reviews['is_translated']],
-                               alpha=0.5, label='Not Translated')
-            axes[i, 2].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
-            axes[i, 2].set_xlabel('Trace Velocity')
-            axes[i, 2].set_ylabel('Trace Volume')
-            axes[i, 2].legend()
+            axes[2].scatter(chosen_reviews[vel_col][chosen_reviews['is_translated']],
+                            chosen_reviews[vol_col][chosen_reviews['is_translated']],
+                            alpha=0.5, label='Translated')
+            axes[2].scatter(chosen_reviews[vel_col][~chosen_reviews['is_translated']],
+                            chosen_reviews[vol_col][~chosen_reviews['is_translated']],
+                            alpha=0.5, label='Not Translated')
+            axes[2].set_title(f'CL: {chunk_length}, SZ={chunk_size}')
+            axes[2].set_xlabel('Trace Velocity')
+            axes[2].set_ylabel('Trace Volume')
+            axes[2].legend()
 
-        figures['clustering_velocity_volume'] = fig
+            figures[f'clustering_velocity_volume_cl_{chunk_length}_sz_{chunk_size}'] = fig
 
         return figures
 

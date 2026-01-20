@@ -33,8 +33,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
     _logger().info('Generating figures for EDA...')
 
     for fig_name, fig in feature_extractor.get_figures().items():
-        fig_path = os.path.join(script_cfg.output_dir, f'{fig_name}.png')
-        fig.savefig(fig_path)
+        fig_path = os.path.join(script_cfg.output_dir, f'{fig_name}.svg')
+        fig.savefig(fig_path, format='svg')
 
     _logger().info('Saving example reviews from the dataset...')
 
