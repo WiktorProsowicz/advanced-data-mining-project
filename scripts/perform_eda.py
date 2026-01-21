@@ -1,48 +1,34 @@
 """Script to perform exploratory data analysis (EDA) on Google Maps reviews dataset."""
-import json
+
 import logging
-import os
+import pathlib
 
 import hydra
 import omegaconf
 
-from advanced_data_mining.data import eda
+from advanced_data_mining.data.eda import raw_eda
+from advanced_data_mining.utils import logging_utils
 
 
 def _logger() -> logging.Logger:
-    return logging.getLogger(__name__)
+    return logging.getLogger('advanced_data_mining')
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='perform_eda')
 def main(script_cfg: omegaconf.DictConfig) -> None:
     """Performs exploratory data analysis (EDA) on Google Maps reviews dataset."""
 
+    logging_utils.setup_logging('perform_eda')
+
     _logger().info('Starting EDA script with config:\n%s',
                    omegaconf.OmegaConf.to_container(script_cfg))
 
-    os.makedirs(script_cfg.output_dir, exist_ok=True)
+    output_dir = pathlib.Path(script_cfg.output_dir)
+    eda_engine = raw_eda.RawEDA(raw_ds_path=script_cfg.raw_ds_path)
 
-    feature_extractor = eda.EDAFeatureExtractor(processed_ds_path=script_cfg.processed_ds_dir)
+    eda_engine.save_authors_stats(output_dir=output_dir / 'authors_stats/')
 
-    _logger().info('Extracting basic statistics from the dataset...')
-    stats = feature_extractor.extract_basic_stats()
-
-    with open(os.path.join(script_cfg.output_dir, 'stats.json'), 'w', encoding='utf-8') as f:
-        json.dump(stats, f, indent=4)
-
-    _logger().info('Generating figures for EDA...')
-
-    for fig_name, fig in feature_extractor.get_figures().items():
-        fig_path = os.path.join(script_cfg.output_dir, f'{fig_name}.svg')
-        fig.savefig(fig_path, format='svg')
-
-    _logger().info('Saving example reviews from the dataset...')
-
-    example_reviews = feature_extractor.get_example_reviews()
-
-    examples_path = os.path.join(script_cfg.output_dir, 'example_reviews.json')
-    with open(examples_path, 'w', encoding='utf-8') as f:
-        json.dump(example_reviews, f, indent=4, ensure_ascii=False)
+    eda_engine.save_locations_stats(output_dir=output_dir / 'locations_stats/')
 
 
 if __name__ == '__main__':

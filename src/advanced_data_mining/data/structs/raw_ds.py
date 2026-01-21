@@ -1,10 +1,10 @@
 """Contains definitions of raw dataset structures and utilities for loading/saving them."""
 
 import json
-import os
 from typing import Dict, Optional
 from typing import List
 from typing import TypeAlias
+import pathlib
 
 import pydantic
 
@@ -18,6 +18,9 @@ class Restaurant(pydantic.BaseModel):
     primary_location: str
     # E.g. "old town"
     secondary_location: str
+
+    def __eq__(self, other) -> bool:  # type: ignore
+        return self.href == other.href  # type: ignore
 
     def __hash__(self) -> int:
         return hash(self.href)
@@ -45,20 +48,27 @@ class RawDSLoader:
     """Loads the raw dataset from the specified directory."""
 
     def __init__(self, raw_ds_path: str):
-        self._raw_ds_path = raw_ds_path
+        self._raw_ds_path = pathlib.Path(raw_ds_path)
 
     def load_dataset(self) -> RawDataset:
         """Loads the raw dataset from JSON files in the specified directory."""
 
         ds: RawDataset = {}
 
-        for json_file in os.listdir(self._raw_ds_path):
+        for primary_location_path in self._raw_ds_path.iterdir():
 
-            with open(os.path.join(self._raw_ds_path, json_file), encoding='utf-8') as f:
-                data = json.load(f)
+            if not primary_location_path.is_dir():
+                continue
 
-            location = Restaurant(**data['location'])
+            for secondary_location_path in primary_location_path.iterdir():
 
-            ds[location] = [Review(**review) for review in data['reviews']]
+                for json_file in secondary_location_path.iterdir():
+
+                    with open(json_file, encoding='utf-8') as f:
+                        data = json.load(f)
+
+                    location = Restaurant(**data['location'])
+
+                    ds[location] = [Review(**review) for review in data['reviews']]
 
         return ds
