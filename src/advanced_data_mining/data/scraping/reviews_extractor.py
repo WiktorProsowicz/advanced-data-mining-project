@@ -113,17 +113,34 @@ class ReviewsExtractor:
 
         if buttons_count != 1:
             _logger().debug('Couldn\'t locate the "Reviews" button on side panel!')
-            return False
 
-        try:
-            await tab_buttons.first.click(timeout=4000)
-            await page.wait_for_timeout(2000)
+        else:
 
-        except Exception as e:  # pylint: disable=broad-except
-            _logger().error('Could\'t open the reviews panel!: %s', e)
-            return False
+            try:
+                await tab_buttons.first.click(timeout=4000)
+                await page.wait_for_timeout(2000)
 
-        return True
+                return True
+
+            except Exception as e:  # pylint: disable=broad-except
+                _logger().error('Could\'t open the reviews panel!: %s', e)
+
+        more_reviews_btn = page.locator('button:has-text("More reviews")')
+
+        if await more_reviews_btn.count() == 0:
+            _logger().debug('Couldn\'t locate the "More reviews" button!')
+        
+        else:
+            try:
+                await more_reviews_btn.first.click(timeout=4000)
+                await page.wait_for_timeout(2000)
+
+                return True
+
+            except Exception as exc:  # pylint: disable=broad-except
+                _logger().debug('Failed to click More reviews button: %s', exc)
+
+        return False
 
     @staticmethod
     async def _scroll_reviews_to_end(page: Page, max_reviews: int) -> None:
