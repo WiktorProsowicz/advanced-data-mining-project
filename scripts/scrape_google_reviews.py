@@ -39,12 +39,6 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
 
     output_path = output_dir / f'{misc_utils.hash_restaurant_href(location.href)}.json'
 
-    if output_path.exists():
-        _logger().info(
-            'Reviews already scraped for location: %s, skipping.', location.name
-        )
-        return
-
     _logger().info('Scraping reviews for location: %s', location.name)
 
     page = await browser_context.new_page()
@@ -152,15 +146,22 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
 
             browser.close()
 
+        query_output_dir = output_dir / _name_to_valid_path(primary_loc)
+        query_output_dir.mkdir(parents=True, exist_ok=True)
+
+        locations = [
+            loc
+            for loc in locations
+            if not query_output_dir.joinpath(misc_utils.hash_restaurant_href(loc.href)).exists()
+        ]
+
         if not locations:
-            _logger().warning('No locations found for location: %s %s', primary_loc, secondary_loc)
+            _logger().warning('No new locations found for location: %s %s',
+                              primary_loc, secondary_loc)
             continue
 
         _logger().info('Found %d locations for location: %s %s',
                        len(locations), primary_loc, secondary_loc)
-
-        query_output_dir = output_dir / _name_to_valid_path(primary_loc)
-        query_output_dir.mkdir(parents=True, exist_ok=True)
 
         asyncio.run(_scrape_reviews_for_restaurants(
             scraper=scraper,
