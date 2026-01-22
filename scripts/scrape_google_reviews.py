@@ -48,8 +48,10 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
                async for review
                in scraper.scrape_reviews_for(location, page)]
 
+    await page.close()
+
     if not reviews:
-        _logger().error('No reviews found for location: %s', location.name)
+        _logger().info('No reviews found for location: %s', location.name)
         return
 
     payload = {
@@ -156,8 +158,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
         ]
 
         if not locations:
-            _logger().warning('No new locations found for location: %s %s',
-                              primary_loc, secondary_loc)
+            _logger().info('No new locations found for location: %s %s',
+                           primary_loc, secondary_loc)
             continue
 
         _logger().info('Found %d locations for location: %s %s',
