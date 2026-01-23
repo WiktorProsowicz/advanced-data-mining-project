@@ -53,12 +53,15 @@ class ReviewsExtractor:
     """Extracts reviews from Google Maps restaurant page."""
 
     _REVIEWS_SCROLL_RETRIES = 5
+    _ITERATION_LOG_INTERVAL = 20
 
     @classmethod
     async def create(cls, page: Page, max_reviews: int) -> 'ReviewsExtractor':
         """Spawns the extractor and prepares the page for review extraction."""
 
-        await ReviewsExtractor._open_more_reviews(page)
+        if not await ReviewsExtractor._open_more_reviews(page):
+            return ReviewsExtractor(None, max_reviews)
+
         await ReviewsExtractor._scroll_reviews_to_end(page, max_reviews)
 
         side_panel = page.locator(_REVIEWS_CONTAINER_SELECTOR).first
@@ -66,21 +69,31 @@ class ReviewsExtractor:
 
         return ReviewsExtractor(review_divs, max_reviews)
 
-    def __init__(self, review_divs: Locator, max_reviews: int) -> None:
+    def __init__(self, review_divs: Optional[Locator], max_reviews: int) -> None:
 
         self._review_divs = review_divs
         self._max_reviews = max_reviews
 
     async def get_n_reviews(self) -> int:
         """Returns the number of reviews extracted from the page."""
+        if self._review_divs is None:
+            return 0
+
         return await self._review_divs.count()
 
     async def iter_reviews(self) -> AsyncIterator[Review]:
         """Yields the extracted reviews one by one."""
 
+        if self._review_divs is None:
+            return
+
         n_reviews_to_take = min(await self._review_divs.count(), self._max_reviews)
 
         for i in range(n_reviews_to_take):
+
+            if (i + 1) % self._ITERATION_LOG_INTERVAL == 0:
+                _logger().debug('Extracted %d reviews.', i + 1)
+
             review_div = self._review_divs.nth(i)
 
             try:
@@ -92,17 +105,42 @@ class ReviewsExtractor:
                 _logger().error('Failed to extract review: %s', exc)
 
     @staticmethod
-    async def _open_more_reviews(page: Page) -> None:
+    async def _open_more_reviews(page: Page) -> bool:
         """Opens the scrollable reviews panel to enable scraping all reviews."""
 
-        button = page.locator('button:has-text("More reviews")')
-        if await button.count() == 0:
-            return
-        try:
-            await button.first.click(timeout=4000)
-            await page.wait_for_timeout(2000)
-        except Exception as exc:  # pylint: disable=broad-except
-            _logger().debug('Failed to click More reviews button: %s', exc)
+        tab_buttons = page.locator('button.hh2c6').filter(has_text='Reviews')
+        buttons_count = await tab_buttons.count()
+
+        if buttons_count != 1:
+            _logger().debug('Couldn\'t locate the "Reviews" button on side panel!')
+
+        else:
+
+            try:
+                await tab_buttons.first.click(timeout=4000)
+                await page.wait_for_timeout(2000)
+
+                return True
+
+            except Exception as e:  # pylint: disable=broad-except
+                _logger().error('Could\'t open the reviews panel!: %s', e)
+
+        more_reviews_btn = page.locator('button:has-text("More reviews")')
+
+        if await more_reviews_btn.count() == 0:
+            _logger().debug('Couldn\'t locate the "More reviews" button!')
+        
+        else:
+            try:
+                await more_reviews_btn.first.click(timeout=4000)
+                await page.wait_for_timeout(2000)
+
+                return True
+
+            except Exception as exc:  # pylint: disable=broad-except
+                _logger().debug('Failed to click More reviews button: %s', exc)
+
+        return False
 
     @staticmethod
     async def _scroll_reviews_to_end(page: Page, max_reviews: int) -> None:

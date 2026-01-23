@@ -17,6 +17,7 @@ from playwright.async_api import BrowserContext as AsyncBrowserContext
 from advanced_data_mining.data.scraping import maps_browser
 from advanced_data_mining.data import raw_ds
 from advanced_data_mining.utils import logging_utils
+from advanced_data_mining.utils import misc as misc_utils
 
 
 def _logger() -> logging.Logger:
@@ -36,13 +37,7 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
                                          scraping_cfg: omegaconf.DictConfig) -> None:
     """Scrapes reviews for a given restaurant."""
 
-    output_path = output_dir / f'{_name_to_valid_path(location.name)}.json'
-
-    if output_path.exists():
-        _logger().info(
-            'Reviews already scraped for location: %s, skipping.', location.name
-        )
-        return
+    output_path = output_dir / f'{misc_utils.hash_restaurant_href(location.href)}.json'
 
     _logger().info('Scraping reviews for location: %s', location.name)
 
@@ -53,8 +48,10 @@ async def _scrape_reviews_for_restaurant(scraper: maps_browser.MapsBrowser,
                async for review
                in scraper.scrape_reviews_for(location, page)]
 
+    await page.close()
+
     if not reviews:
-        _logger().error('No reviews found for location: %s', location.name)
+        _logger().info('No reviews found for location: %s', location.name)
         return
 
     payload = {
@@ -151,17 +148,22 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
 
             browser.close()
 
+        query_output_dir = output_dir / _name_to_valid_path(primary_loc)
+        query_output_dir.mkdir(parents=True, exist_ok=True)
+
+        locations = [
+            loc
+            for loc in locations
+            if not query_output_dir.joinpath(misc_utils.hash_restaurant_href(loc.href)).exists()
+        ]
+
         if not locations:
-            _logger().warning('No locations found for location: %s %s', primary_loc, secondary_loc)
+            _logger().info('No new locations found for location: %s %s',
+                           primary_loc, secondary_loc)
             continue
 
         _logger().info('Found %d locations for location: %s %s',
                        len(locations), primary_loc, secondary_loc)
-
-        query_output_dir = (output_dir /
-                            _name_to_valid_path(primary_loc) /
-                            _name_to_valid_path(secondary_loc))
-        query_output_dir.mkdir(parents=True, exist_ok=True)
 
         asyncio.run(_scrape_reviews_for_restaurants(
             scraper=scraper,
