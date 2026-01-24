@@ -1,6 +1,6 @@
 """Utilities for performing EDA or processed ds analysis."""
 
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 import seaborn as sns
@@ -19,7 +19,37 @@ def is_outlier(series: pd.Series) -> pd.Series:
     return (series < lower_bound) | (series > upper_bound)
 
 
+DARK_COLOR_STD = '#24403e'
+LIGHT_COLOR_STD = '#80d9d4'
+MIDDLE_COLOR_STD = '#519190'
+COOL_COLOR_STD = '#899b9c'
+WARM_COLOR_STD = '#d96891'
+NEUTRAL_COLOR_STD = '#bbbbbb'
+
+
 def get_gradient_palette(n: int) -> Any:
     """Returns a gradient colormap used for EDA plots."""
 
-    return sns.color_palette("blend:#2a5957,#5dc2bd", n_colors=n)
+    return sns.blend_palette(
+        colors=[DARK_COLOR_STD, LIGHT_COLOR_STD],
+        n_colors=n,
+        as_cmap=False
+    )
+
+
+def get_gradient_cmap() -> Any:
+    """Returns a gradient colormap used for EDA plots."""
+
+    return sns.blend_palette(
+        colors=[DARK_COLOR_STD, LIGHT_COLOR_STD],
+        as_cmap=True
+    )
+
+
+def get_coolwarm_cmap() -> Any:
+    """Returns the coolwarm colormap used for EDA plots."""
+
+    return sns.blend_palette(
+        colors=[COOL_COLOR_STD, NEUTRAL_COLOR_STD, WARM_COLOR_STD],
+        as_cmap=True
+    )

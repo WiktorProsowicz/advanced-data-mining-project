@@ -156,7 +156,7 @@ class RawEDA:
             inner='quart',
             inner_kws={'linewidth': 2},
             legend=False,
-            color='steelblue',
+            color=eda_utils.MIDDLE_COLOR_STD,
             ax=ax
         )
 
@@ -183,7 +183,7 @@ class RawEDA:
             orient='v',
             inner='quart',
             inner_kws={'linewidth': 2},
-            palette='coolwarm',
+            palette=eda_utils.get_gradient_palette(5),
             legend=False,
             ax=ax
         )
@@ -206,7 +206,7 @@ class RawEDA:
         sns.countplot(locations_df,
                       order=locations_df['primary_location'].value_counts().index,
                       y='primary_location',
-                      color='steelblue',
+                      color=eda_utils.MIDDLE_COLOR_STD,
                       stat='percent',
                       legend=False,
                       width=1,
@@ -249,7 +249,7 @@ class RawEDA:
                 label=str(rating),
                 ax=ax,
                 width=1,
-                color=plt.get_cmap('Blues')(.5 + (rating - 1) / 4 / 2)
+                color=eda_utils.get_gradient_cmap()((rating - 1) / 4)
             )
 
         ax.set_axisbelow(True)
@@ -302,8 +302,7 @@ class RawEDA:
             y='Number of restaurants in location',
             size='Avg number of written reviews',
             hue='Mean restaurant rating',
-            palette='coolwarm',
-            alpha=0.7,
+            palette=eda_utils.get_coolwarm_cmap(),
             height=6,
             aspect=1.5
         )
@@ -345,7 +344,7 @@ class RawEDA:
             x='Number of restaurants in location',
             y='Restaurant rating',
             hue='Restaurant rating',
-            palette='coolwarm',
+            palette=eda_utils.get_coolwarm_cmap(),
             ax=ax
         )
 
@@ -391,7 +390,7 @@ class RawEDA:
             x='Number of restaurants in location',
             y='Proportion of translated reviews',
             hue='Proportion of translated reviews',
-            palette='viridis',
+            palette=eda_utils.get_gradient_cmap(),
             ax=ax
         )
 
@@ -415,7 +414,7 @@ class RawEDA:
             x='rating',
             kind='count',
             hue='is_translated',
-            palette='dark',
+            palette=eda_utils.get_gradient_palette(2),
             height=6,
             aspect=1.5
         )

@@ -28,6 +28,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
 
     eda_engine.save_authors_stats(output_dir=output_dir / 'authors_stats/')
 
+    eda_engine.save_locations_stats(output_dir=output_dir / 'locations_stats/')
+
     eda_engine.save_review_stats(output_dir=output_dir / 'review_stats/')
 
 
