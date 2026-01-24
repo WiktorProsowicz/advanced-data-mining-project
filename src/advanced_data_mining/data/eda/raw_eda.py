@@ -69,11 +69,12 @@ class RawEDA:
                            location.primary_location + location.secondary_location,
                            location.href,
                            int(review.rating),
-                           review.author.n_reviews)
-
+                           review.author.n_reviews,
+                           review.original is not None)
         locations_df = pd.DataFrame(_df_generator(),  # type: ignore
                                     columns=['primary_location', 'secondary_location',
-                                             'restaurant_name', 'rating', 'n_reviews'])
+                                             'restaurant_name', 'rating', 'n_reviews',
+                                             'is_translated'])
 
         primary_stats = {
             'n_locations': locations_df['primary_location'].nunique(),
@@ -107,6 +108,8 @@ class RawEDA:
         self._save_distributions_by_location_size(locations_df, output_dir)
 
         self._save_restaurant_rating_by_location_size_scatter(locations_df, output_dir)
+
+        self._save_proportion_translated_reviews_by_location_size(locations_df, output_dir)
 
     def _save_written_reviews_distribution(self,
                                            n_reviews_series: pd.Series,
@@ -325,3 +328,47 @@ class RawEDA:
         fig.subplots_adjust(top=.95)
 
         fig.savefig(output_dir / 'restaurant_rating_by_location_size.svg')
+
+    def _save_proportion_translated_reviews_by_location_size(self,
+                                                             locations_df: pd.DataFrame,
+                                                             output_dir: pathlib.Path) -> None:
+        """Saves plot of proportion of translated reviews by location size."""
+
+        stats_df = (
+            locations_df
+            .groupby('primary_location', as_index=False)
+            .agg(n_reviews=('is_translated', 'size'),
+                 n_translated_reviews=('is_translated', 'sum'))
+        )
+        stats_df['Proportion of translated reviews'] = (
+            stats_df['n_translated_reviews'] / stats_df['n_reviews']
+        )
+        loc_counts = (
+            locations_df
+            .groupby('primary_location')['restaurant_name']
+            .nunique()
+        )
+        stats_df['Number of restaurants in location'] = (
+            stats_df['primary_location'].map(loc_counts)
+        )
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        sns.scatterplot(
+            data=stats_df,
+            x='Number of restaurants in location',
+            y='Proportion of translated reviews',
+            hue='Proportion of translated reviews',
+            palette='viridis',
+            ax=ax
+        )
+
+        ax.set_title('Proportion of translated reviews by location size.')
+        ax.set_ylabel('Proportion of translated reviews')
+        ax.set_xlabel('Number of restaurants in location')
+        ax.xaxis.grid(True, 'minor', linewidth=0.25)
+        ax.set_xscale('log')
+        ax.set_axisbelow(True)
+        fig.subplots_adjust(top=.95)
+
+        fig.savefig(output_dir / 'proportion_translated_reviews_by_location_size.svg')
