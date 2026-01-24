@@ -111,6 +111,38 @@ class RawEDA:
 
         self._save_proportion_translated_reviews_by_location_size(locations_df, output_dir)
 
+    def save_review_stats(self, output_dir: pathlib.Path) -> None:
+        """Dumps statistics about reviews in a given directory."""
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        def _df_generator():  # type: ignore
+            for _, reviews in self._raw_ds.items():
+                for review in reviews:
+
+                    yield (int(review.rating),
+                           len(review.text),
+                           review.original is not None)
+
+        reviews_df = pd.DataFrame(_df_generator(),  # type: ignore
+                                  columns=['rating', 'text_length', 'is_translated'])
+
+        primary_stats = {
+            'n_reviews': len(reviews_df),
+            'rating_stats': reviews_df['rating'].describe().to_dict(),
+            'text_length_stats': reviews_df['text_length'].describe().to_dict(),
+            'n_translated_reviews': int(reviews_df['is_translated'].sum()),
+        }
+
+        with output_dir.joinpath('review_stats.json').open('w') as f:
+            json.dump(primary_stats, f, indent=4)
+
+        self._save_review_rating_distribution(reviews_df, output_dir)
+
+        self._save_review_length_distribution(
+            reviews_df[~eda_utils.is_outlier(reviews_df['text_length'])],
+            output_dir / 'review_length_distribution_no_outliers.svg')
+
     def _save_written_reviews_distribution(self,
                                            n_reviews_series: pd.Series,
                                            output_path: pathlib.Path) -> None:
@@ -372,3 +404,59 @@ class RawEDA:
         fig.subplots_adjust(top=.95)
 
         fig.savefig(output_dir / 'proportion_translated_reviews_by_location_size.svg')
+
+    def _save_review_rating_distribution(self,
+                                         reviews_df: pd.DataFrame,
+                                         output_dir: pathlib.Path) -> None:
+        """Saves distribution plot of review ratings."""
+
+        graph = sns.catplot(
+            data=reviews_df,
+            x='rating',
+            kind='count',
+            hue='is_translated',
+            palette='dark',
+            height=6,
+            aspect=1.5
+        )
+
+        graph.set_axis_labels('Review rating', 'Number of reviews')
+        graph.ax.set_title('Distribution of review ratings')
+        graph.ax.set_axisbelow(True)
+        graph.ax.grid(axis='y')
+        graph.legend.set_title('Is translated')
+        graph.figure.subplots_adjust(top=.95)
+
+        graph.figure.savefig(output_dir / 'review_rating_distribution.svg')
+
+    def _save_review_length_distribution(self,
+                                         reviews_df: pd.DataFrame,
+                                         output_path: pathlib.Path) -> None:
+        """Saves distribution plot of review text lengths."""
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        reviews_df = reviews_df.rename(columns={'text_length': 'Review text length',
+                                                'rating': 'Review rating',
+                                                'is_translated': 'Is translated'})
+
+        sns.violinplot(
+            data=reviews_df,
+            x='Review rating',
+            y='Review text length',
+            hue='Is translated',
+            split=True,
+            inner="quart",
+            palette=eda_utils.get_gradient_palette(2),
+            fill=False,
+            ax=ax
+        )
+
+        ax.set_title('Review text length vs. review rating')
+        ax.set_xlabel('Review rating')
+        ax.set_ylabel('Review text length (characters)')
+        ax.xaxis.grid(True, 'minor', linewidth=0.25)
+        ax.set_axisbelow(True)
+        fig.subplots_adjust(top=.95)
+
+        fig.savefig(output_path)
