@@ -60,15 +60,13 @@ class RawDSLoader:
             if not primary_location_path.is_dir():
                 continue
 
-            for secondary_location_path in primary_location_path.iterdir():
+            for json_file in primary_location_path.iterdir():
 
-                for json_file in secondary_location_path.iterdir():
+                with open(json_file, encoding='utf-8') as f:
+                    data = json.load(f)
 
-                    with open(json_file, encoding='utf-8') as f:
-                        data = json.load(f)
+                location = Restaurant(**data['location'])
 
-                    location = Restaurant(**data['location'])
-
-                    ds[location] = [Review(**review) for review in data['reviews']]
+                ds[location] = [Review(**review) for review in data['reviews']]
 
         return ds
