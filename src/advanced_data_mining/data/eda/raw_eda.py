@@ -310,7 +310,7 @@ class RawEDA:
             x='Number of restaurants in location',
             y='Restaurant rating',
             hue='Restaurant rating',
-            palette='inferno',
+            palette='coolwarm',
             ax=ax
         )
 
