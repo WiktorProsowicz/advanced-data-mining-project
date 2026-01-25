@@ -16,6 +16,28 @@ from transformers import BertModel
 from transformers import BertTokenizer
 
 
+def num_words(text: str) -> int:
+    """Returns the number of words in the given text."""
+    words = nltk.tokenize.word_tokenize(text)
+    return len(words)
+
+
+def num_sentences(text: str) -> int:
+    """Returns the number of sentences in the given text."""
+    sentences = nltk.tokenize.sent_tokenize(text)
+    return len(sentences)
+
+
+def normalize_text(text: str) -> str:
+    """Normalizes text.
+
+    Normalization includes converting currency, numbers to words, and standardizing punctuation.
+    """
+
+    sentences = [sentence.text_with_ws for sentence in gruut.sentences(text, phonemes=False)]
+    return ' '.join(sentences)
+
+
 @dataclasses.dataclass
 class Vocabulary:
     """Holds vocabulary composed from a corpus of texts."""
@@ -69,25 +91,6 @@ class TextPreprocessor:
                                       reverse=True):
 
                 f.write(f'{word};{count};{vocabulary.word_in_doc_counts[word]}\n')
-
-    def num_words(self, text: str) -> int:
-        """Returns the number of words in the given text."""
-        words = nltk.tokenize.word_tokenize(text)
-        return len(words)
-
-    def num_sentences(self, text: str) -> int:
-        """Returns the number of sentences in the given text."""
-        sentences = nltk.tokenize.sent_tokenize(text)
-        return len(sentences)
-
-    def normalize_text(self, text: str) -> str:
-        """Normalizes text.
-
-        Normalization includes converting currency, numbers to words, and standardizing punctuation.
-        """
-
-        sentences = [sentence.text_with_ws for sentence in gruut.sentences(text, phonemes=False)]
-        return ' '.join(sentences)
 
     def get_bert_embeddings(self, text: str) -> Tuple[List[torch.Tensor], torch.Tensor]:
         """Generates word-level and sentence-level embeddings for the given text's sentences."""

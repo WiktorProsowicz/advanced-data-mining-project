@@ -1,0 +1,10 @@
+raw_ds_path: tmp/dev_ds
+processed_ds_path: tmp/processed_ds
+processing_metadata_path: tmp/processing_metadata
+bert_embedder_cfg:
+  model_name: microsoft/deberta-v2-xxlarge
+count_vectorizer_cfg:
+  max_vocabulary_size: 2000
+  skip_stop_words: true
+pos_vectorizer_cfg:
+  tagset: universal
