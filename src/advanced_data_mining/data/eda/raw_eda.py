@@ -164,7 +164,7 @@ class RawEDA:
         )
 
         ax.set_axisbelow(True)
-        ax.grid(axis='y')
+        ax.grid(axis='x', which='minor')
         ax.xaxis.set_ticks([])
         ax.set_title('Number of all Google Maps reviews written by authors')
         ax.set_ylabel('Number of reviews')
@@ -192,7 +192,7 @@ class RawEDA:
         )
 
         ax.set_axisbelow(True)
-        ax.grid(axis='y')
+        ax.grid(axis='x', which='minor')
         ax.set_title('Distribution of number of authors\' reviews by review rating')
         ax.set_xlabel('Rating')
         ax.set_ylabel('Number of authors\' reviews')
@@ -216,7 +216,7 @@ class RawEDA:
                       ax=ax)
 
         ax.set_axisbelow(True)
-        ax.grid(axis='x')
+        ax.grid(axis='y', which='minor')
         ax.set_title('Distribution of reviews by locations')
         ax.set_ylabel('Location')
         ax.set_xlabel('Percent of reviews')
@@ -256,7 +256,7 @@ class RawEDA:
             )
 
         ax.set_axisbelow(True)
-        ax.grid(axis='x')
+        ax.grid(axis='y', which='minor')
         ax.set_title('Distribution of reviews by locations')
         ax.set_ylabel('Location')
         ax.set_xlabel('Percent of reviews')
@@ -425,7 +425,7 @@ class RawEDA:
         graph.set_axis_labels('Review rating', 'Number of reviews')
         graph.ax.set_title('Distribution of review ratings')
         graph.ax.set_axisbelow(True)
-        graph.ax.grid(axis='y')
+        graph.ax.grid(axis='y', which='minor')
         graph.legend.set_title('Is translated')
         graph.figure.subplots_adjust(top=.95)
 
