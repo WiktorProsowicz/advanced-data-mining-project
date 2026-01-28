@@ -14,6 +14,8 @@ import omegaconf
 from advanced_data_mining.data import processor
 from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.data.processing import count_vectorizer
+from advanced_data_mining.data.processing import embeddings
+from advanced_data_mining.data.processing import num_features
 from advanced_data_mining.utils import logging_utils
 
 
@@ -30,17 +32,33 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     vectorizer = count_vectorizer.CountVectorizer(
         count_vectorizer.CountVectorizerConfig.model_validate(cfg.count_vectorizer_cfg),
-        base_vectorizer=None,
-        doc_frequency_vector=None
+        word_vectorizer=None,
+        doc_frequency_vector=None,
+        pos_vectorizer=None
+    )
+
+    embeddings_generator = embeddings.EmbeddingGenerator(
+        embeddings.EmbeddingGeneratorConfig.model_validate(cfg.bert_embedding_generator_cfg),
+        device=cfg.bert_device
+    )
+
+    num_features_extractor = num_features.NumericalFeaturesExtractor(
+        num_features.NumericalFeaturesExtractorCfg.model_validate(
+            cfg.numerical_features_extractor_cfg
+        )
+    )
+
+    ds_processor = processor.DataProcessor(
+        vectorizer=vectorizer,
+        embeddings_generator=embeddings_generator,
+        num_features_extractor=num_features_extractor
     )
 
     raw_dataset = raw_ds.RawDSLoader(cfg.raw_ds_path).load_dataset()
 
-    ds_processor = processor.DataProcessor(
-        count_vectorizer=vectorizer
-    )
-
     ds_processor.fit_transform(raw_dataset, pathlib.Path(cfg.processed_ds_path))
+
+    ds_processor.save_processing_metadata(pathlib.Path(cfg.processing_metadata_path))
 
 
 if __name__ == '__main__':
