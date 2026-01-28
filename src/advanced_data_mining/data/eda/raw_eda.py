@@ -9,6 +9,7 @@ import seaborn as sns
 
 from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.data.eda import utils as eda_utils
+from advanced_data_mining.data.processing import num_features
 
 
 class RawEDA:
@@ -142,6 +143,8 @@ class RawEDA:
         self._save_review_length_distribution(
             reviews_df[~eda_utils.is_outlier(reviews_df['text_length'])],
             output_dir / 'review_length_distribution_no_outliers.svg')
+
+        self._save_categorized_options_stats(output_dir / 'categorized_options_stats/')
 
     def _save_written_reviews_distribution(self,
                                            n_reviews_series: pd.Series,
@@ -459,3 +462,90 @@ class RawEDA:
         fig.subplots_adjust(top=.95)
 
         fig.savefig(output_path)
+
+    def _save_categorized_options_stats(self, output_dir: pathlib.Path) -> None:
+        """Saves statistics about categorized opinions in reviews."""
+
+        def _raw_df_generator():  # type: ignore
+            for _, reviews in self._raw_ds.items():
+                for review in reviews:
+
+                    if review.categorized_opinions is not None:
+                        yield review.categorized_opinions
+                    else:
+                        yield {}
+
+        self._save_categorized_options_stats_for_df(
+            pd.DataFrame(_raw_df_generator()),  # type: ignore
+            output_dir / 'raw/'
+        )
+
+        def _sanitized_df_generator():  # type: ignore
+            for _, reviews in self._raw_ds.items():
+                for review in reviews:
+
+                    if review.categorized_opinions is not None:
+                        yield num_features.sanitize_categorized_options(review.categorized_opinions)
+                    else:
+                        yield {}
+
+        self._save_categorized_options_stats_for_df(
+            pd.DataFrame(_sanitized_df_generator()),  # type: ignore
+            output_dir / 'sanitized/'
+        )
+
+    def _save_categorized_options_stats_for_df(self,
+                                               cat_opts_df: pd.DataFrame,
+                                               output_dir: pathlib.Path) -> None:
+        """Saves statistics about categorized opinions in reviews from a given DataFrame."""
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        basic_stats = {
+            **cat_opts_df.describe().to_dict(),
+            'n_reviews_with_no_categorized_options': int(cat_opts_df.isna().all(axis=1).sum())
+        }
+
+        with output_dir.joinpath('categorized_options_stats.json').open('w') as f:
+            json.dump(basic_stats, f, indent=4, ensure_ascii=False)
+
+        for option_name in cat_opts_df.columns:
+            self._save_distribution_of_unique_values_of_cat_option(
+                cat_opts_df,
+                option_name,
+                output_dir
+            )
+
+    def _save_distribution_of_unique_values_of_cat_option(self,
+                                                          cat_opts_df: pd.DataFrame,
+                                                          option_name: str,
+                                                          output_dir: pathlib.Path) -> None:
+        """Saves distribution of unique values of a categorized option."""
+
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        dist_df = cat_opts_df[option_name].value_counts().reset_index()
+        dist_df.sort_values(by='count', ascending=False, inplace=True)
+
+        original_count = len(dist_df)
+        dist_df = dist_df.iloc[:min(50, original_count)]
+
+        sns.barplot(
+            x=dist_df['count'],
+            y=dist_df[option_name],
+            color=eda_utils.MIDDLE_COLOR_STD,
+            ax=ax,
+            orient='y',
+            width=1
+        )
+
+        ax.set_axisbelow(True)
+        ax.grid(axis='y')
+        ax.set_title(
+            f'Distribution of {len(dist_df)}/{original_count} most common\n'
+            f'values of categorized option "{option_name}"')
+        ax.set_xlabel('Number of occurrences')
+        ax.set_ylabel('Categorized option value')
+
+        fig.subplots_adjust(left=.3)
+        fig.savefig(output_dir / f'{option_name.replace(" ", "_")}_distribution.svg')
