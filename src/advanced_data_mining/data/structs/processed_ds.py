@@ -15,9 +15,10 @@ class ProcessedReview(pydantic.BaseModel):
     """Represents a processed review with its data features"""
     restaurant_info: raw_ds.Restaurant
     normalized_text: str
-    is_translated: bool
     word_count_vector_pth: pathlib.Path
-    bert_embedding_pth: pathlib.Path
+    pos_count_vector_pth: pathlib.Path
+    bert_embeddings_pth: pathlib.Path
+    trace_features_pth: pathlib.Path
 
 
 class ProcessedDsPathHandler:
@@ -36,8 +37,7 @@ class ProcessedDsPathHandler:
 
     def create_new_review(self,
                           restaurant: raw_ds.Restaurant,
-                          normalized_text: str,
-                          is_translated: bool) -> None:
+                          normalized_text: str) -> None:
         """Creates a new ProcessedReview instance with file paths set."""
 
         restaurant_path = self.get_path_to_restaurant(restaurant)
@@ -60,9 +60,6 @@ class ProcessedDsPathHandler:
         with review_path.joinpath('normalized_text.txt').open('w', encoding='utf-8') as f:
             f.write(normalized_text)
 
-        with review_path.joinpath('metadata.json').open('w', encoding='utf-8') as f:
-            json.dump({'is_translated': is_translated}, f, ensure_ascii=False, indent=4)
-
     def iter_restaurants(self) -> Iterator[raw_ds.Restaurant]:
         """Loads all restaurants in the processed dataset."""
 
@@ -83,13 +80,11 @@ class ProcessedDsPathHandler:
             with review_dir.joinpath('normalized_text.txt').open('r', encoding='utf-8') as f:
                 normalized_text = f.read()
 
-            with review_dir.joinpath('metadata.json').open('r', encoding='utf-8') as f:
-                metadata = json.load(f)
-
             yield ProcessedReview(
                 restaurant_info=restaurant,
                 normalized_text=normalized_text,
-                is_translated=metadata['is_translated'],
                 word_count_vector_pth=review_dir.joinpath('word_count_vector.pt'),
-                bert_embedding_pth=review_dir.joinpath('bert_embedding.pt')
+                pos_count_vector_pth=review_dir.joinpath('pos_count_vector.pt'),
+                bert_embeddings_pth=review_dir.joinpath('bert_embeddings.pt'),
+                trace_features_pth=review_dir.joinpath('trace_features.yaml')
             )

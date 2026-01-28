@@ -1,25 +1,46 @@
 """Module that processes raw dataset into a structured processed dataset."""
 
+import logging
 import pathlib
-import torch
+import yaml
+import tqdm
 
-from advanced_data_mining.data.processing.count_vectorizer import CountVectorizer
+import torch
+from sklearn.preprocessing import StandardScaler
+
+from advanced_data_mining.data.processing import count_vectorizer
+from advanced_data_mining.data.processing import embeddings
+from advanced_data_mining.data.processing import num_features
 from advanced_data_mining.data.structs import raw_ds as raw_ds_structs
 from advanced_data_mining.data.structs import processed_ds as processed_ds_structs
-from advanced_data_mining.data.processing import text_processing
+
+
+def _logger() -> logging.Logger:
+    return logging.getLogger(__name__)
 
 
 class DataProcessor:
     """Processes raw data into a structured format suitable for training/testing."""
 
-    def __init__(self, count_vectorizer: CountVectorizer) -> None:
+    def __init__(self,
+                 vectorizer: count_vectorizer.CountVectorizer,
+                 embeddings_generator: embeddings.EmbeddingGenerator,
+                 num_features_extractor: num_features.NumericalFeaturesExtractor
+                 ) -> None:
 
-        self._count_vectorizer = count_vectorizer
+        self._count_vectorizer = vectorizer
+        self._embeddings_generator = embeddings_generator
+        self._num_features_extractor = num_features_extractor
+
+        self._count_vectors_scaler = StandardScaler()
+        self._pos_vectors_scaler = StandardScaler()
 
     def fit_transform(self,
                       raw_dataset: raw_ds_structs.RawDataset,
                       output_dir: pathlib.Path) -> None:
         """Fits the processor on the raw dataset and transforms it."""
+
+        _logger().info('Fitting and transforming the dataset...')
 
         self._normalize_and_save_review_drafts(
             raw_dataset,
@@ -33,18 +54,115 @@ class DataProcessor:
             reviews = list(path_handler.iter_reviews_for(restaurant))
             self._count_vectorizer.fit([review.normalized_text for review in reviews])
 
-        for restaurant in path_handler.iter_restaurants():
+        self._generate_count_features(output_dir)
+
+        self._generate_bert_features(output_dir)
+
+    def transform(self,
+                  raw_dataset: raw_ds_structs.RawDataset,
+                  output_dir: pathlib.Path) -> None:
+        """Transforms the raw dataset using the already fitted processor."""
+
+        _logger().info('Transforming the dataset...')
+
+        self._normalize_and_save_review_drafts(
+            raw_dataset,
+            output_dir
+        )
+
+        self._generate_count_features(output_dir)
+
+        self._generate_bert_features(output_dir)
+
+    def save_processing_metadata(self, output_dir: pathlib.Path) -> None:
+        """Saves the processing metadata to the specified directory."""
+
+        self._count_vectorizer.serialize(output_dir.joinpath('count_vectorizer'))
+
+        with (output_dir
+              .joinpath('numerical_features_extractor_cfg.json')
+              .open('w', encoding='utf-8')) as f:
+            f.write(self._num_features_extractor.cfg.model_dump_json())
+
+        with (output_dir
+              .joinpath('bert_embedding_generator_cfg.json')
+              .open('w', encoding='utf-8')) as f:
+            f.write(self._embeddings_generator.cfg.model_dump_json())
+
+        scaling_meta_path = output_dir.joinpath('scaling_metadata')
+        scaling_meta_path.mkdir(parents=True, exist_ok=True)
+
+        with (scaling_meta_path
+              .joinpath('count_vectors_mean_std.pt')
+              .open('wb')) as f:
+            torch.save((torch.tensor(self._count_vectors_scaler.mean_),
+                        torch.tensor(self._count_vectors_scaler.scale_)), f)
+
+        with (scaling_meta_path
+              .joinpath('pos_vectors_mean_std.pt')
+              .open('wb')) as f:
+            torch.save((torch.tensor(self._pos_vectors_scaler.mean_),
+                        torch.tensor(self._pos_vectors_scaler.scale_)), f)
+
+    def _generate_count_features(self, processed_ds_path: pathlib.Path) -> None:
+        """Generates features based on count vectorization."""
+
+        path_handler = processed_ds_structs.ProcessedDsPathHandler(processed_ds_path)
+
+        for restaurant in tqdm.tqdm(path_handler.iter_restaurants(),
+                                    desc='Generating count-based features',
+                                    unit='restaurant'):
 
             reviews = list(path_handler.iter_reviews_for(restaurant))
 
-            word_count_matrix = self._count_vectorizer.transform(
+            word_count_matrix = self._count_vectorizer.generate_word_count_vectors(
                 [review.normalized_text for review in reviews]
             )
 
             for review, word_count_vector in zip(reviews, word_count_matrix):
 
+                self._count_vectors_scaler.partial_fit([word_count_vector])
+
                 with review.word_count_vector_pth.open('wb') as f:
                     torch.save(torch.tensor(word_count_vector), f)
+
+            pos_count_matrix = self._count_vectorizer.generate_pos_count_vectors(
+                [review.normalized_text for review in reviews]
+            )
+
+            for review, pos_count_vector in zip(reviews, pos_count_matrix):
+
+                self._pos_vectors_scaler.partial_fit([pos_count_vector])
+
+                with review.pos_count_vector_pth.open('wb') as f:
+                    torch.save(torch.tensor(pos_count_vector), f)
+
+    def _generate_bert_features(self, processed_ds_path: pathlib.Path) -> None:
+        """Generates BERT embeddings and features based on them."""
+
+        path_handler = processed_ds_structs.ProcessedDsPathHandler(processed_ds_path)
+
+        for restaurant in tqdm.tqdm(path_handler.iter_restaurants(),
+                                    desc='Generating BERT-based features',
+                                    unit='restaurant'):
+
+            reviews = list(path_handler.iter_reviews_for(restaurant))
+
+            for review in reviews:
+
+                word_embeddings, sentence_embeddings = (
+                    self._embeddings_generator.get_bert_embeddings(review.normalized_text)
+                )
+
+                with review.bert_embeddings_pth.open('wb') as f:
+                    torch.save(torch.stack(sentence_embeddings), f)
+
+                trace_features = self._num_features_extractor.generate_trace_features(
+                    word_embeddings=torch.cat(word_embeddings, dim=0)
+                )
+
+                with review.trace_features_pth.open('w', encoding='utf-8') as f:
+                    yaml.dump(trace_features, f)
 
     def _normalize_and_save_review_drafts(self,
                                           raw_dataset: raw_ds_structs.RawDataset,
@@ -56,10 +174,9 @@ class DataProcessor:
         for restaurant, reviews in raw_dataset.items():
 
             for review in reviews:
-                normalized_text = text_processing.normalize_text(review.text)
+                normalized_text = num_features.normalize_text(review.text)
 
                 path_handler.create_new_review(
                     restaurant=restaurant,
-                    normalized_text=normalized_text,
-                    is_translated=review.original is not None
+                    normalized_text=normalized_text
                 )
