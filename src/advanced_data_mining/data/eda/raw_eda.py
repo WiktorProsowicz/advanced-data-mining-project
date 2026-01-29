@@ -545,9 +545,11 @@ class RawEDA:
         ax.grid(axis='y')
         ax.set_title(
             f'Distribution of {len(dist_df)}/{original_count} most common\n'
-            f'values of categorized option "{option_name}"')
+            f'values of categorized option "{option_name}"\n.'
+            f'Total reviews with this option: {cat_opts_df[option_name].notna().sum()}')
         ax.set_xlabel('Number of occurrences')
         ax.set_ylabel('Categorized option value')
 
         fig.subplots_adjust(left=.3)
         fig.savefig(output_dir / f'{option_name.replace(" ", "_")}_distribution.svg')
+        plt.close(fig)
