@@ -95,8 +95,9 @@ class CountVectorizer:
         self._word_vectorizer.fit(docs)
         self._pos_vectorizer.fit(map(self._pos_tag_document, docs))
 
-        self._doc_frequency_vector = np.zeros(
-            len(self._word_vectorizer.vocabulary_), dtype=np.int32)
+        if self._doc_frequency_vector.size == 0:
+            self._doc_frequency_vector = np.zeros(
+                len(self._word_vectorizer.vocabulary_), dtype=np.int32)
 
         for doc in docs:
             vector = self._word_vectorizer.transform([doc])
