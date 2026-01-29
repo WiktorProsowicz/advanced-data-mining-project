@@ -1,13 +1,10 @@
 """Utilities for extracting numerical features from text data."""
 
 import logging
-import re
 
 import pydantic
-import gruut
 import nltk
 import numpy as np
-from tomlkit import value
 import torch
 
 
@@ -21,31 +18,6 @@ def num_sentences(text: str) -> int:
     """Returns the number of sentences in the given text."""
     sentences = nltk.tokenize.sent_tokenize(text)
     return len(sentences)
-
-
-def normalize_text(text: str) -> str:
-    """Normalizes text.
-
-    Normalization includes converting currency, numbers to words, and standardizing punctuation.
-    """
-
-    sentences = [sentence.text_with_ws for sentence in gruut.sentences(text, phonemes=False)]
-    return ' '.join(sentences)
-
-
-def sanitize_categorized_options(cat_opts: dict[str, str]) -> dict[str, str]:
-    """Sanitizes categorized options by removing unwanted characters."""
-
-    replacement = {
-        '–': '-',
-        ' ': ' ',
-        '…': '',
-    }
-
-    return {
-        key: ''.join(replacement.get(char, char) for char in value).strip()
-        for key, value in cat_opts.items()
-    }
 
 
 def _logger() -> logging.Logger:

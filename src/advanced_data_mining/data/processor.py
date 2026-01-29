@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from advanced_data_mining.data.processing import count_vectorizer
 from advanced_data_mining.data.processing import embeddings
 from advanced_data_mining.data.processing import num_features
+from advanced_data_mining.data.processing import utils as processing_utils
 from advanced_data_mining.data.structs import raw_ds as raw_ds_structs
 from advanced_data_mining.data.structs import processed_ds as processed_ds_structs
 
@@ -174,7 +175,7 @@ class DataProcessor:
         for restaurant, reviews in raw_dataset.items():
 
             for review in reviews:
-                normalized_text = num_features.normalize_text(review.text)
+                normalized_text = processing_utils.normalize_text(review.text)
 
                 path_handler.create_new_review(
                     restaurant=restaurant,

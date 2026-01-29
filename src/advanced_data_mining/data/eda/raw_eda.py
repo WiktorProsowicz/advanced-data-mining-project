@@ -9,7 +9,7 @@ import seaborn as sns
 
 from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.data.eda import utils as eda_utils
-from advanced_data_mining.data.processing import num_features
+from advanced_data_mining.data.processing import utils as processing_utils
 
 
 class RawEDA:
@@ -485,7 +485,9 @@ class RawEDA:
                 for review in reviews:
 
                     if review.categorized_opinions is not None:
-                        yield num_features.sanitize_categorized_options(review.categorized_opinions)
+                        yield processing_utils.sanitize_categorized_options(
+                            review.categorized_opinions
+                        )
                     else:
                         yield {}
 
