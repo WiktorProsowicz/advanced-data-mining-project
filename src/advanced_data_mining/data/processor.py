@@ -1,5 +1,6 @@
 """Module that processes raw dataset into a structured processed dataset."""
 
+import json
 import logging
 import pathlib
 import yaml
@@ -60,6 +61,8 @@ class DataProcessor:
 
         self._generate_bert_features(output_dir)
 
+        self._generate_numeric_features(output_dir)
+
     def transform(self,
                   raw_dataset: raw_ds_structs.RawDataset,
                   output_dir: pathlib.Path) -> None:
@@ -76,31 +79,32 @@ class DataProcessor:
 
         self._generate_bert_features(output_dir)
 
+        self._generate_numeric_features(output_dir)
+
     def save_processing_metadata(self, output_dir: pathlib.Path) -> None:
         """Saves the processing metadata to the specified directory."""
 
-        self._count_vectorizer.serialize(output_dir.joinpath('count_vectorizer'))
+        metadata_path_handler = processed_ds_structs.ProcessingMetadataPathHandler(output_dir)
 
-        with (output_dir
-              .joinpath('numerical_features_extractor_cfg.json')
+        self._count_vectorizer.serialize(metadata_path_handler.count_vectorizer_path)
+
+        with (metadata_path_handler.numerical_features_cfg_path
               .open('w', encoding='utf-8')) as f:
             f.write(self._num_features_extractor.cfg.model_dump_json())
 
-        with (output_dir
-              .joinpath('bert_embedding_generator_cfg.json')
+        with (metadata_path_handler.bert_embeddings_cfg_path
               .open('w', encoding='utf-8')) as f:
             f.write(self._embeddings_generator.cfg.model_dump_json())
 
-        scaling_meta_path = output_dir.joinpath('scaling_metadata')
-        scaling_meta_path.mkdir(parents=True, exist_ok=True)
+        metadata_path_handler.scaling_metadata_path.mkdir(parents=True, exist_ok=True)
 
-        with (scaling_meta_path
+        with (metadata_path_handler.scaling_metadata_path
               .joinpath('count_vectors_mean_std.pt')
               .open('wb')) as f:
             torch.save((torch.tensor(self._count_vectors_scaler.mean_),
                         torch.tensor(self._count_vectors_scaler.scale_)), f)
 
-        with (scaling_meta_path
+        with (metadata_path_handler.scaling_metadata_path
               .joinpath('pos_vectors_mean_std.pt')
               .open('wb')) as f:
             torch.save((torch.tensor(self._pos_vectors_scaler.mean_),
@@ -164,6 +168,36 @@ class DataProcessor:
                 with review.trace_features_pth.open('w', encoding='utf-8') as f:
                     yaml.dump(trace_features, f)
 
+    def _generate_numeric_features(self, processed_ds_path: pathlib.Path) -> None:
+        """Generates numerical features for the processed dataset."""
+
+        path_handler = processed_ds_structs.ProcessedDsPathHandler(processed_ds_path)
+
+        for restaurant in tqdm.tqdm(path_handler.iter_restaurants(),
+                                    desc='Generating numerical features',
+                                    unit='restaurant'):
+
+            for review in path_handler.iter_reviews_for(restaurant):
+
+                if review.raw_review.categorized_opinions is None:
+                    cat_options = {}
+                else:
+                    cat_options = review.raw_review.categorized_opinions
+
+                encoded_cat_options = (self._num_features_extractor
+                                       .generate_cat_options_onehot_indices(cat_options))
+
+                n_author_reviews_index = (self._num_features_extractor
+                                          .generate_n_author_reviews_onehot_index(
+                                              review.raw_review.author.n_reviews))
+
+                with review.num_features_pth.open('w', encoding='utf-8') as f:
+                    json.dump({
+                        'encoded_cat_options': encoded_cat_options,
+                        'n_author_reviews_index': n_author_reviews_index,
+                        'is_translated': review.raw_review.original is not None
+                    }, f)
+
     def _normalize_and_save_review_drafts(self,
                                           raw_dataset: raw_ds_structs.RawDataset,
                                           processed_ds_path: pathlib.Path) -> None:
@@ -171,9 +205,14 @@ class DataProcessor:
 
         path_handler = processed_ds_structs.ProcessedDsPathHandler(processed_ds_path)
 
-        for restaurant, reviews in raw_dataset.items():
+        for restaurant, reviews in tqdm.tqdm(raw_dataset.items(),
+                                             desc='Preparing review drafts',
+                                             unit='restaurant'):
 
-            for review in reviews:
+            for review in tqdm.tqdm(reviews,
+                                    desc=f'Normalizing reviews for {restaurant.name}',
+                                    unit='review',
+                                    leave=False):
                 normalized_text = processing_utils.normalize_text(review.text)
 
                 review_draft = path_handler.create_new_review(

@@ -45,12 +45,18 @@ class Review(pydantic.BaseModel):
 def hash_review(review: Review) -> str:
     """Produces a deterministic hash for a Review instance."""
 
+    if review.categorized_opinions is None:
+        categorized_opinions_str = ''
+
+    else:
+        categorized_opinions_str = f'{sorted(review.categorized_opinions.items())}'
+
     review_str = (
         f'{review.author}|'
         f'{review.original}'
         f'{review.text}|'
         f'{review.rating}|'
-        f'{sorted(review.categorized_opinions.items())}'
+        f'{categorized_opinions_str}'
     )
     return hashlib.sha256(bytes(review_str, encoding='utf-8')).hexdigest()
 

@@ -11,6 +11,33 @@ from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.utils import misc as misc_utils
 
 
+class ProcessingMetadataPathHandler:
+    """Manages access to processing metadata files."""
+
+    def __init__(self, base_path: pathlib.Path) -> None:
+        self._base_path = base_path
+
+    @property
+    def numerical_features_cfg_path(self) -> pathlib.Path:
+        """Returns the path to the numerical features configuration file."""
+        return self._base_path.joinpath('numerical_features_extractor_cfg.yaml')
+
+    @property
+    def bert_embeddings_cfg_path(self) -> pathlib.Path:
+        """Returns the path to the BERT embeddings configuration file."""
+        return self._base_path.joinpath('bert_embeddings_generator_cfg.yaml')
+
+    @property
+    def scaling_metadata_path(self) -> pathlib.Path:
+        """Returns the directory containing scaling metadata."""
+        return self._base_path.joinpath('scaling_metadata/')
+
+    @property
+    def count_vectorizer_path(self) -> pathlib.Path:
+        """Returns the path to the count vectorizer metadata."""
+        return self._base_path.joinpath('count_vectorizer/')
+
+
 class ProcessedReview(pydantic.BaseModel):
     """Represents a processed review with its data features"""
     restaurant_info: raw_ds.Restaurant
@@ -20,6 +47,7 @@ class ProcessedReview(pydantic.BaseModel):
     pos_count_vector_pth: pathlib.Path
     bert_embeddings_pth: pathlib.Path
     trace_features_pth: pathlib.Path
+    num_features_pth: pathlib.Path
 
     def load_normalized_text(self) -> str:
         """Loads the normalized text of the review from file."""
@@ -108,5 +136,6 @@ class ProcessedDsPathHandler:
             word_count_vector_pth=review_path.joinpath('word_count_vector.pt'),
             pos_count_vector_pth=review_path.joinpath('pos_count_vector.pt'),
             bert_embeddings_pth=review_path.joinpath('bert_embeddings.pt'),
-            trace_features_pth=review_path.joinpath('trace_features.yaml')
+            trace_features_pth=review_path.joinpath('trace_features.yaml'),
+            num_features_pth=review_path.joinpath('numerical_features.pt')
         )

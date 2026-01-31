@@ -24,9 +24,24 @@ def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
+class CategorizedOptionSetup(pydantic.BaseModel):
+    """Configuration for processing of a categorized option."""
+    name: str
+    supported_values: list[str]
+
+
+class NAuthorReviewsBinSetup(pydantic.BaseModel):
+    """Configuration for processing number of author reviews feature."""
+    cat_name: str
+    min_val: int
+    max_val: int
+
+
 class NumericalFeaturesExtractorCfg(pydantic.BaseModel):
     """Configuration for NumericalFeaturesExtractor."""
     chunk_and_step_sizes: list[tuple[int, int]]
+    categorized_options_used: list[CategorizedOptionSetup]
+    n_author_reviews_quantization: list[NAuthorReviewsBinSetup]
 
 
 class NumericalFeaturesExtractor:
@@ -40,6 +55,45 @@ class NumericalFeaturesExtractor:
     def cfg(self) -> NumericalFeaturesExtractorCfg:
         """Returns the configuration of the NumericalFeaturesExtractor."""
         return self._cfg
+
+    def generate_cat_options_onehot_indices(self,
+                                            categorized_options: dict[str, str]
+                                            ) -> dict[str, int]:
+        """Generates one-hot indices for the given categorized options.
+
+        If an option is missing, its index is 0. If an option has an unsupported value,
+        its index is len(supported_values) + 1.
+        """
+
+        features: dict[str, int] = {}
+
+        for option_setup in self._cfg.categorized_options_used:
+            if option_setup.name not in categorized_options:
+                features[option_setup.name] = 0
+                continue
+
+            if categorized_options[option_setup.name] not in option_setup.supported_values:
+                features[option_setup.name] = len(option_setup.supported_values) + 1
+                continue
+
+            features[option_setup.name] = option_setup.supported_values.index(
+                categorized_options[option_setup.name]) + 1
+
+        return features
+
+    def generate_n_author_reviews_onehot_index(self,
+                                               n_author_reviews: int | None
+                                               ) -> int:
+        """Generates one-hot index for the given number of author reviews."""
+
+        if n_author_reviews is None:
+            return 0
+
+        for idx, bin_setup in enumerate(self._cfg.n_author_reviews_quantization):
+            if bin_setup.min_val <= n_author_reviews <= bin_setup.max_val:
+                return idx + 1
+
+        return len(self._cfg.n_author_reviews_quantization) + 1
 
     def generate_trace_features(self,
                                 word_embeddings: torch.Tensor
