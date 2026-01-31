@@ -20,12 +20,12 @@ class ProcessingMetadataPathHandler:
     @property
     def numerical_features_cfg_path(self) -> pathlib.Path:
         """Returns the path to the numerical features configuration file."""
-        return self._base_path.joinpath('numerical_features_extractor_cfg.yaml')
+        return self._base_path.joinpath('numerical_features_extractor_cfg.json')
 
     @property
     def bert_embeddings_cfg_path(self) -> pathlib.Path:
         """Returns the path to the BERT embeddings configuration file."""
-        return self._base_path.joinpath('bert_embeddings_generator_cfg.yaml')
+        return self._base_path.joinpath('bert_embeddings_generator_cfg.json')
 
     @property
     def scaling_metadata_path(self) -> pathlib.Path:
@@ -136,6 +136,6 @@ class ProcessedDsPathHandler:
             word_count_vector_pth=review_path.joinpath('word_count_vector.pt'),
             pos_count_vector_pth=review_path.joinpath('pos_count_vector.pt'),
             bert_embeddings_pth=review_path.joinpath('bert_embeddings.pt'),
-            trace_features_pth=review_path.joinpath('trace_features.yaml'),
-            num_features_pth=review_path.joinpath('numerical_features.pt')
+            trace_features_pth=review_path.joinpath('trace_features.json'),
+            num_features_pth=review_path.joinpath('numerical_features.json')
         )

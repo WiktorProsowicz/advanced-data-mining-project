@@ -3,7 +3,6 @@
 import json
 import logging
 import pathlib
-import yaml
 import tqdm
 
 import torch
@@ -167,7 +166,7 @@ class DataProcessor:
                 )
 
                 with review.trace_features_pth.open('w', encoding='utf-8') as f:
-                    yaml.dump(trace_features, f)
+                    json.dump(trace_features, f, ensure_ascii=False, indent=4)
 
     def _generate_numeric_features(self, processed_ds_path: pathlib.Path) -> None:
         """Generates numerical features for the processed dataset."""
@@ -197,7 +196,7 @@ class DataProcessor:
                         'encoded_cat_options': encoded_cat_options,
                         'n_author_reviews_index': n_author_reviews_index,
                         'is_translated': review.raw_review.original is not None
-                    }, f)
+                    }, f, ensure_ascii=False, indent=4)
 
     def _normalize_and_save_review_drafts(self,
                                           raw_dataset: raw_ds_structs.RawDataset,
