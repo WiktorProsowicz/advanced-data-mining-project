@@ -14,11 +14,18 @@ from advanced_data_mining.utils import misc as misc_utils
 class ProcessedReview(pydantic.BaseModel):
     """Represents a processed review with its data features"""
     restaurant_info: raw_ds.Restaurant
-    normalized_text: str
+    raw_review: raw_ds.Review
+    normalized_text_pth: pathlib.Path
     word_count_vector_pth: pathlib.Path
     pos_count_vector_pth: pathlib.Path
     bert_embeddings_pth: pathlib.Path
     trace_features_pth: pathlib.Path
+
+    def load_normalized_text(self) -> str:
+        """Loads the normalized text of the review from file."""
+
+        with self.normalized_text_pth.open('r', encoding='utf-8') as f:
+            return f.read()
 
 
 class ProcessedDsPathHandler:
@@ -37,7 +44,7 @@ class ProcessedDsPathHandler:
 
     def create_new_review(self,
                           restaurant: raw_ds.Restaurant,
-                          normalized_text: str) -> None:
+                          raw_review: raw_ds.Review) -> ProcessedReview:
         """Creates a new ProcessedReview instance with file paths set."""
 
         restaurant_path = self.get_path_to_restaurant(restaurant)
@@ -48,17 +55,20 @@ class ProcessedDsPathHandler:
             with restaurant_path.joinpath('info.json').open('w', encoding='utf-8') as f:
                 json.dump(restaurant.model_dump(), f, ensure_ascii=False, indent=4)
 
-        reviews_path = restaurant_path.joinpath('reviews')
-        reviews_path.mkdir(parents=True, exist_ok=True)
+        review_path = (restaurant_path
+                       .joinpath('reviews')
+                       .joinpath(raw_ds.hash_review(raw_review)))
 
-        max_review_id = max((int(p.name) for p in reviews_path.iterdir()),
-                            default=-1)
-
-        review_path = reviews_path.joinpath(str(max_review_id + 1))
         review_path.mkdir(parents=True, exist_ok=True)
 
-        with review_path.joinpath('normalized_text.txt').open('w', encoding='utf-8') as f:
-            f.write(normalized_text)
+        with review_path.joinpath('raw_review.json').open('w', encoding='utf-8') as f:
+            json.dump(raw_review.model_dump(), f, ensure_ascii=False, indent=4)
+
+        return self._review_from_path(
+            review_path=review_path,
+            restaurant_info=restaurant,
+            raw_review=raw_review
+        )
 
     def iter_restaurants(self) -> Iterator[raw_ds.Restaurant]:
         """Loads all restaurants in the processed dataset."""
@@ -77,14 +87,26 @@ class ProcessedDsPathHandler:
         reviews_path = restaurant_dir.joinpath('reviews')
 
         for review_dir in reviews_path.iterdir():
-            with review_dir.joinpath('normalized_text.txt').open('r', encoding='utf-8') as f:
-                normalized_text = f.read()
 
-            yield ProcessedReview(
-                restaurant_info=restaurant,
-                normalized_text=normalized_text,
-                word_count_vector_pth=review_dir.joinpath('word_count_vector.pt'),
-                pos_count_vector_pth=review_dir.joinpath('pos_count_vector.pt'),
-                bert_embeddings_pth=review_dir.joinpath('bert_embeddings.pt'),
-                trace_features_pth=review_dir.joinpath('trace_features.yaml')
-            )
+            with review_dir.joinpath('raw_review.json').open('r', encoding='utf-8') as f:
+                review = raw_ds.Review.model_validate(json.load(f))
+
+            yield self._review_from_path(review_path=review_dir,
+                                         restaurant_info=restaurant,
+                                         raw_review=review)
+
+    def _review_from_path(self,
+                          review_path: pathlib.Path,
+                          restaurant_info: raw_ds.Restaurant,
+                          raw_review: raw_ds.Review) -> ProcessedReview:
+        """Loads a ProcessedReview from its directory path."""
+
+        return ProcessedReview(
+            restaurant_info=restaurant_info,
+            raw_review=raw_review,
+            normalized_text_pth=review_path.joinpath('normalized_text.txt'),
+            word_count_vector_pth=review_path.joinpath('word_count_vector.pt'),
+            pos_count_vector_pth=review_path.joinpath('pos_count_vector.pt'),
+            bert_embeddings_pth=review_path.joinpath('bert_embeddings.pt'),
+            trace_features_pth=review_path.joinpath('trace_features.yaml')
+        )

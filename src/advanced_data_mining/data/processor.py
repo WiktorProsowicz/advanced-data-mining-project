@@ -52,8 +52,9 @@ class DataProcessor:
 
         for restaurant in path_handler.iter_restaurants():
 
-            reviews = list(path_handler.iter_reviews_for(restaurant))
-            self._count_vectorizer.fit([review.normalized_text for review in reviews])
+            self._count_vectorizer.fit([review.load_normalized_text()
+                                        for review
+                                        in path_handler.iter_reviews_for(restaurant)])
 
         self._generate_count_features(output_dir)
 
@@ -117,7 +118,7 @@ class DataProcessor:
             reviews = list(path_handler.iter_reviews_for(restaurant))
 
             word_count_matrix = self._count_vectorizer.generate_word_count_vectors(
-                [review.normalized_text for review in reviews]
+                [review.load_normalized_text() for review in reviews]
             )
 
             for review, word_count_vector in zip(reviews, word_count_matrix):
@@ -128,7 +129,7 @@ class DataProcessor:
                     torch.save(torch.tensor(word_count_vector), f)
 
             pos_count_matrix = self._count_vectorizer.generate_pos_count_vectors(
-                [review.normalized_text for review in reviews]
+                [review.load_normalized_text() for review in reviews]
             )
 
             for review, pos_count_vector in zip(reviews, pos_count_matrix):
@@ -147,12 +148,10 @@ class DataProcessor:
                                     desc='Generating BERT-based features',
                                     unit='restaurant'):
 
-            reviews = list(path_handler.iter_reviews_for(restaurant))
-
-            for review in reviews:
+            for review in path_handler.iter_reviews_for(restaurant):
 
                 word_embeddings, sentence_embeddings = (
-                    self._embeddings_generator.get_bert_embeddings(review.normalized_text)
+                    self._embeddings_generator.get_bert_embeddings(review.load_normalized_text())
                 )
 
                 with review.bert_embeddings_pth.open('wb') as f:
@@ -177,7 +176,10 @@ class DataProcessor:
             for review in reviews:
                 normalized_text = processing_utils.normalize_text(review.text)
 
-                path_handler.create_new_review(
+                review_draft = path_handler.create_new_review(
                     restaurant=restaurant,
-                    normalized_text=normalized_text
+                    raw_review=review
                 )
+
+                with review_draft.normalized_text_pth.open('w', encoding='utf-8') as f:
+                    f.write(normalized_text)

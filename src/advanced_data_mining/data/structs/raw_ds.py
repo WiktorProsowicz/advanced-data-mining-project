@@ -1,5 +1,6 @@
 """Contains definitions of raw dataset structures and utilities for loading/saving them."""
 
+import hashlib
 import json
 from typing import Dict, Optional
 from typing import List
@@ -39,6 +40,19 @@ class Review(pydantic.BaseModel):
     rating: float
     author: Author
     categorized_opinions: Optional[Dict[str, str]]
+
+
+def hash_review(review: Review) -> str:
+    """Produces a deterministic hash for a Review instance."""
+
+    review_str = (
+        f'{review.author}|'
+        f'{review.original}'
+        f'{review.text}|'
+        f'{review.rating}|'
+        f'{sorted(review.categorized_opinions.items())}'
+    )
+    return hashlib.sha256(bytes(review_str, encoding='utf-8')).hexdigest()
 
 
 RawDataset: TypeAlias = Dict[Restaurant, List[Review]]
