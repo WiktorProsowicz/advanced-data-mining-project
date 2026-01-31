@@ -182,7 +182,8 @@ class DataProcessor:
                 if review.raw_review.categorized_opinions is None:
                     cat_options = {}
                 else:
-                    cat_options = review.raw_review.categorized_opinions
+                    cat_options = processing_utils.sanitize_categorized_options(
+                        review.raw_review.categorized_opinions)
 
                 encoded_cat_options = (self._num_features_extractor
                                        .generate_cat_options_onehot_indices(cat_options))
