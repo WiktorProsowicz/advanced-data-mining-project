@@ -51,11 +51,12 @@ class DataProcessor:
 
         path_handler = processed_ds_structs.ProcessedDsPathHandler(output_dir)
 
-        for restaurant in path_handler.iter_restaurants():
+        _logger().info('Fitting the CountVectorizer...')
 
-            self._count_vectorizer.fit([review.load_normalized_text()
-                                        for review
-                                        in path_handler.iter_reviews_for(restaurant)])
+        self._count_vectorizer.fit([review.load_normalized_text()
+                                    for restaurant in path_handler.iter_restaurants()
+                                    for review
+                                    in path_handler.iter_reviews_for(restaurant)])
 
         self._generate_count_features(output_dir)
 

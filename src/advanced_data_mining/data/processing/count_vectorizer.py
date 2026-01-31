@@ -95,18 +95,18 @@ class CountVectorizer:
         self._word_vectorizer.fit(docs)
         self._pos_vectorizer.fit(map(self._pos_tag_document, docs))
 
+    def generate_word_count_vectors(self, documents: Iterable[str]) -> np.ndarray:
+        """Transforms the provided documents into vectorized representations."""
+
+        features = self._word_vectorizer.transform(documents).toarray()
+
         if self._doc_frequency_vector.size == 0:
             self._doc_frequency_vector = np.zeros(
                 len(self._word_vectorizer.vocabulary_), dtype=np.int32)
 
-        for doc in docs:
-            vector = self._word_vectorizer.transform([doc])
-            self._doc_frequency_vector += (vector.toarray()[0] > 0).astype(np.int32)
+        self._doc_frequency_vector += np.sum(features > 0, axis=0)
 
-    def generate_word_count_vectors(self, documents: Iterable[str]) -> np.ndarray:
-        """Transforms the provided documents into vectorized representations."""
-
-        return self._word_vectorizer.transform(documents).toarray()  # type: ignore
+        return features  # type: ignore
 
     def generate_pos_count_vectors(self, documents: Iterable[str]) -> np.ndarray:
         """Generates POS tag count vectors for the provided documents."""
