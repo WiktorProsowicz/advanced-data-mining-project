@@ -196,7 +196,8 @@ class DataProcessor:
                     json.dump({
                         'encoded_cat_options': encoded_cat_options,
                         'n_author_reviews_index': n_author_reviews_index,
-                        'is_translated': review.raw_review.original is not None
+                        'is_translated': review.raw_review.original is not None,
+                        'rating': int(review.raw_review.rating)
                     }, f, ensure_ascii=False, indent=4)
 
     def _normalize_and_save_review_drafts(self,
