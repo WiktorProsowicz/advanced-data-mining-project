@@ -42,6 +42,51 @@ class ProcessingMetadataPathHandler:
         """Returns the path to the count vectorizer metadata."""
         return self._base_path.joinpath('count_vectorizer/')
 
+    def get_supported_cat_opt_names(self) -> list[str]:
+        """Returns the list of supported categorical option names."""
+
+        with self.numerical_features_cfg_path.open('r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        return [
+            option_setup['name'] for option_setup in cfg['categorized_options_used']
+        ]
+
+    def get_cat_opt_label_mapping(self, feature_name: str) -> dict[int, str]:
+        """Returns the mapping from encoded categorical option values to labels."""
+
+        with self.numerical_features_cfg_path.open('r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        for option_setup in cfg['categorized_options_used']:
+            if option_setup['name'] == feature_name:
+                return {**dict(enumerate(option_setup['supported_values'], 1)),
+                        0: 'UNKNOWN',
+                        len(option_setup['supported_values']) + 1: 'OTHER'}
+
+        return {}
+
+    def get_n_author_reviews_label_mapping(self) -> dict[int, str]:
+        """Returns the mapping for number of author reviews index to labels."""
+
+        with self.numerical_features_cfg_path.open('r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        return {
+            **{index: quant['cat_name']
+               for index, quant in enumerate(cfg['n_author_reviews_quantization'], 1)},
+            len(cfg['n_author_reviews_quantization']) + 1: 'OTHER',
+            0: 'UNKNOWN'
+        }
+
+    def get_chunk_and_step_sizes(self) -> list[tuple[int, int]]:
+        """Returns the list of chunk sizes and step sizes for trace features extraction."""
+
+        with self.numerical_features_cfg_path.open('r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        return [tuple(chunk_setup) for chunk_setup in cfg['chunk_and_step_sizes']]
+
 
 class ProcessedReview(pydantic.BaseModel):
     """Represents a processed review with its data features"""

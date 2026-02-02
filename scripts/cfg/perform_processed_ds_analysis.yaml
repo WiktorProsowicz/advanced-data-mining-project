@@ -1,0 +1,3 @@
+processed_ds_path: tmp/processed_ds/
+processing_metadata_path: tmp/processing_metadata/
+output_dir: tmp/processed_ds_analysis/
