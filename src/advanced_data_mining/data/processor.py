@@ -36,6 +36,12 @@ class DataProcessor:
         self._count_vectors_scaler = StandardScaler()
         self._pos_vectors_scaler = StandardScaler()
 
+        self._trace_features_scaler = {
+            (chunk_size, step_size): StandardScaler()
+            for chunk_size, step_size in
+            self._num_features_extractor.cfg.chunk_and_step_sizes
+        }
+
     def fit_transform(self,
                       raw_dataset: raw_ds_structs.RawDataset,
                       output_dir: pathlib.Path) -> None:
@@ -116,6 +122,13 @@ class DataProcessor:
             torch.save((torch.tensor(self._pos_vectors_scaler.mean_),
                         torch.tensor(self._pos_vectors_scaler.scale_)), f)
 
+        for (chunk_size, step_size), scaler in self._trace_features_scaler.items():
+            with (metadata_path_handler.scaling_metadata_path
+                  .joinpath(f'trace_features_mean_std_chunk_{chunk_size}_step_{step_size}.pt')
+                  .open('wb')) as f:
+                torch.save((torch.tensor(scaler.mean_),
+                            torch.tensor(scaler.scale_)), f)
+
     def _generate_count_features(self, processed_ds_path: pathlib.Path) -> None:
         """Generates features based on count vectorization."""
 
@@ -170,6 +183,12 @@ class DataProcessor:
                 trace_features = self._num_features_extractor.generate_trace_features(
                     word_embeddings=torch.cat(word_embeddings, dim=0)
                 )
+
+                for trace_feature in trace_features:
+                    scaler = self._trace_features_scaler[
+                        (trace_feature['chunk_length'], trace_feature['step_size'])]
+                    scaler.partial_fit(
+                        [[trace_feature['trace_velocity'], trace_feature['trace_volume']]])
 
                 with review.trace_features_pth.open('w', encoding='utf-8') as f:
                     json.dump(trace_features, f, ensure_ascii=False, indent=4)

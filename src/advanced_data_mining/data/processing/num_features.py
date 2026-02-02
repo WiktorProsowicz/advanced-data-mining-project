@@ -3,6 +3,7 @@
 import logging
 import pathlib
 import json
+from typing import Any
 
 import pydantic
 import nltk
@@ -148,7 +149,7 @@ class NumericalFeaturesExtractor:
 
     def generate_trace_features(self,
                                 word_embeddings: torch.Tensor
-                                ) -> list[dict[str, float]]:
+                                ) -> list[dict[str, Any]]:
         """Generates (velocity, volume) for the given word embeddings for all chunking settings."""
 
         features: list[dict[str, float]] = []
