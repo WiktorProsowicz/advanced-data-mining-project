@@ -4,6 +4,7 @@ import pathlib
 import json
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker
 import pandas as pd
 import seaborn as sns
 
@@ -138,7 +139,15 @@ class RawEDA:
         with output_dir.joinpath('review_stats.json').open('w') as f:
             json.dump(primary_stats, f, indent=4)
 
-        self._save_review_rating_distribution(reviews_df, output_dir)
+        self._save_review_rating_distribution(
+            reviews_df,
+            normalize=False,
+            output_path=output_dir / 'rating_distribution.svg',)
+
+        self._save_review_rating_distribution(
+            reviews_df,
+            normalize=True,
+            output_path=output_dir / 'rating_distribution_normalized.svg',)
 
         self._save_review_length_distribution(
             reviews_df[~eda_utils.is_outlier(reviews_df['text_length'])],
@@ -409,27 +418,47 @@ class RawEDA:
 
     def _save_review_rating_distribution(self,
                                          reviews_df: pd.DataFrame,
-                                         output_dir: pathlib.Path) -> None:
+                                         normalize: bool,
+                                         output_path: pathlib.Path) -> None:
         """Saves distribution plot of review ratings."""
 
+        df = reviews_df.copy()
+        df['share'] = 1.0
+
+        if normalize:
+            df.loc[df['is_translated'], 'share'] /= df['is_translated'].sum()
+            df.loc[~df['is_translated'], 'share'] /= (~df['is_translated']).sum()
+            df['share'] *= 100.0
+
         graph = sns.catplot(
-            data=reviews_df,
+            data=df,
+            y='share',
             x='rating',
-            kind='count',
+            kind='bar',
+            estimator=sum,
             hue='is_translated',
             palette=eda_utils.get_gradient_palette(2),
             height=6,
             aspect=1.5
         )
 
-        graph.set_axis_labels('Review rating', 'Number of reviews')
-        graph.ax.set_title('Distribution of review ratings')
+        graph.set_axis_labels('Review rating', 'Share of reviews')
+
+        if not normalize:
+            graph.ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(
+                lambda y, _: f'{int(y)}'))
+            graph.ax.set_title('Distribution of review ratings')
+
+        else:
+            graph.ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+            graph.ax.set_title('Distribution of review ratings (normalized by translation status)')
+
         graph.ax.set_axisbelow(True)
         graph.ax.grid(axis='y', which='minor')
         graph.legend.set_title('Is translated')
         graph.figure.subplots_adjust(top=.95)
 
-        graph.figure.savefig(output_dir / 'review_rating_distribution.svg')
+        graph.figure.savefig(output_path)
 
     def _save_review_length_distribution(self,
                                          reviews_df: pd.DataFrame,
