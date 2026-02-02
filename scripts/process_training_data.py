@@ -45,7 +45,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
     num_features_extractor = num_features.NumericalFeaturesExtractor(
         num_features.NumericalFeaturesExtractorCfg.model_validate(
             cfg.numerical_features_extractor_cfg
-        )
+        ),
+        known_locations=None
     )
 
     ds_processor = processor.DataProcessor(

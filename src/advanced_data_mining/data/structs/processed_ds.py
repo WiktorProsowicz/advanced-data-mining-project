@@ -18,9 +18,14 @@ class ProcessingMetadataPathHandler:
         self._base_path = base_path
 
     @property
+    def numerical_features_extractor_path(self) -> pathlib.Path:
+        """Returns the path to the numerical features configuration file."""
+        return self._base_path.joinpath('numerical_features_extractor/')
+
+    @property
     def numerical_features_cfg_path(self) -> pathlib.Path:
         """Returns the path to the numerical features configuration file."""
-        return self._base_path.joinpath('numerical_features_extractor_cfg.json')
+        return self._base_path.joinpath('numerical_features_extractor/config.json')
 
     @property
     def bert_embeddings_cfg_path(self) -> pathlib.Path:

@@ -57,6 +57,13 @@ class DataProcessor:
                                     for review
                                     in path_handler.iter_reviews_for(restaurant)])
 
+        _logger().info('Fitting the NumericalFeaturesExtractor...')
+
+        self._num_features_extractor.fit([review
+                                          for restaurant in path_handler.iter_restaurants()
+                                          for review
+                                          in path_handler.iter_reviews_for(restaurant)])
+
         self._generate_count_features(output_dir)
 
         self._generate_bert_features(output_dir)
@@ -88,9 +95,8 @@ class DataProcessor:
 
         self._count_vectorizer.serialize(metadata_path_handler.count_vectorizer_path)
 
-        with (metadata_path_handler.numerical_features_cfg_path
-              .open('w', encoding='utf-8')) as f:
-            f.write(self._num_features_extractor.cfg.model_dump_json())
+        self._num_features_extractor.serialize(
+            metadata_path_handler.numerical_features_extractor_path)
 
         with (metadata_path_handler.bert_embeddings_cfg_path
               .open('w', encoding='utf-8')) as f:
@@ -192,12 +198,17 @@ class DataProcessor:
                                           .generate_n_author_reviews_onehot_index(
                                               review.raw_review.author.n_reviews))
 
+                location_index = (self._num_features_extractor
+                                  .generate_location_onehot_index(
+                                      review.restaurant_info.primary_location))
+
                 with review.num_features_pth.open('w', encoding='utf-8') as f:
                     json.dump({
                         'encoded_cat_options': encoded_cat_options,
                         'n_author_reviews_index': n_author_reviews_index,
                         'is_translated': review.raw_review.original is not None,
-                        'rating': int(review.raw_review.rating)
+                        'rating': int(review.raw_review.rating),
+                        'location_index': location_index
                     }, f, ensure_ascii=False, indent=4)
 
     def _normalize_and_save_review_drafts(self,
