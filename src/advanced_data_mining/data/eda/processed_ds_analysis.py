@@ -69,10 +69,20 @@ class ProcessedDatasetAnalyzer:
 
             self._save_trace_features_distributions(
                 sub_df,
-                output_path=output_dir / f'trace_features_chunk_{chunk_size}_step_{step_size}.svg'
+                hue_col='is_translated',
+                output_path=output_dir / f'trace_cs_{chunk_size}_ss_{step_size}_by_translated.svg'
             )
 
-            general_stats[f'chunk_{chunk_size}_step_{step_size}'] = sub_df.describe().to_dict()
+            self._save_trace_features_distributions(
+                sub_df,
+                hue_col='rating',
+                output_path=output_dir / f'trace_cs_{chunk_size}_ss_{step_size}_by_rating.svg'
+            )
+
+            general_stats[f'chunk_{chunk_size}_step_{step_size}'] = (
+                sub_df[['trace_velocity', 'trace_volume']]
+                .describe(percentiles=[0.1, .05, .25, .5, .75, .9, .95, .99],).to_dict()
+            )
 
         with (output_dir / 'general_stats.json').open('w', encoding='utf-8') as f:
             json.dump(general_stats, f, ensure_ascii=False, indent=4)
@@ -160,45 +170,37 @@ class ProcessedDatasetAnalyzer:
 
     def _save_trace_features_distributions(self,
                                            trace_features_df: pd.DataFrame,
+                                           hue_col: str,
                                            output_path: pathlib.Path) -> None:
         """Saves the distributions of trace features to the output directory."""
 
-        fig, ax = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
+        fig, ax = plt.subplots(figsize=(10, 10), sharey=True)
+
+        mean_velocity = trace_features_df['trace_velocity'].mean()
+        mean_volume = trace_features_df['trace_volume'].mean()
 
         sns.scatterplot(
             data=(trace_features_df
-                  .groupby('is_translated')
+                  .groupby(hue_col)
                   .apply(lambda x: x.sample(1000, random_state=42), include_groups=False)),
             x='trace_velocity',
             y='trace_volume',
-            hue='is_translated',
+            hue=hue_col,
             alpha=0.6,
-            palette=eda_utils.get_gradient_palette(2),
-            ax=ax[0]
+            palette=eda_utils.get_gradient_palette(n=trace_features_df[hue_col].nunique()),
+            ax=ax
         )
 
-        sns.scatterplot(
-            data=(trace_features_df
-                  .groupby('rating')
-                  .apply(lambda x: x.sample(400, random_state=42), include_groups=False)),
-            x='trace_velocity',
-            y='trace_volume',
-            hue='rating',
-            alpha=0.6,
-            palette=eda_utils.get_coolwarm_cmap(),
-            ax=ax[1]
-        )
+        ax.axvline(mean_velocity, color=eda_utils.LIGHT_COLOR_STD,
+                   linestyle='--', label='Mean Velocity', alpha=0.3)
+        ax.axhline(mean_volume, color=eda_utils.DARK_COLOR_STD,
+                   linestyle='--', label='Mean Volume', alpha=0.3)
+        ax.legend()
 
-        ax[0].set_title('Trace Features by Translation Status')
-        ax[0].set_xlabel('Trace Velocity')
-        ax[0].set_ylabel('Trace Volume')
-        ax[0].grid(True, linestyle='--')
-        ax[0].set_axisbelow(True)
-
-        ax[1].set_title('Trace Features by Rating')
-        ax[1].set_xlabel('Trace Velocity')
-        ax[1].set_ylabel('Trace Volume')
-        ax[1].grid(True, linestyle='--')
-        ax[1].set_axisbelow(True)
+        ax.set_title('Trace features distribution')
+        ax.set_xlabel('Trace Velocity')
+        ax.set_ylabel('Trace Volume')
+        ax.grid(True, linestyle='--')
+        ax.set_axisbelow(True)
 
         fig.savefig(output_path)
