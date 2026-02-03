@@ -9,7 +9,7 @@ import torch
 from sklearn.preprocessing import StandardScaler
 
 from advanced_data_mining.data.processing import count_vectorizer
-from advanced_data_mining.data.processing import embeddings
+from advanced_data_mining.data.processing import embeddings as embeddings_processing
 from advanced_data_mining.data.processing import num_features
 from advanced_data_mining.data.processing import utils as processing_utils
 from advanced_data_mining.data.structs import raw_ds as raw_ds_structs
@@ -25,7 +25,7 @@ class DataProcessor:
 
     def __init__(self,
                  vectorizer: count_vectorizer.CountVectorizer,
-                 embeddings_generator: embeddings.EmbeddingGenerator,
+                 embeddings_generator: embeddings_processing.EmbeddingGenerator,
                  num_features_extractor: num_features.NumericalFeaturesExtractor
                  ) -> None:
 
@@ -75,6 +75,8 @@ class DataProcessor:
         self._generate_bert_features(output_dir)
 
         self._generate_numeric_features(output_dir)
+
+        self._calculate_scaling_parameters(output_dir)
 
     def transform(self,
                   raw_dataset: raw_ds_structs.RawDataset,
@@ -140,6 +142,10 @@ class DataProcessor:
 
             reviews = list(path_handler.iter_reviews_for(restaurant))
 
+            if all(review.word_count_vector_pth.exists() and review.pos_count_vector_pth.exists()
+                   for review in reviews):
+                continue
+
             word_count_matrix = self._count_vectorizer.generate_word_count_vectors(
                 [review.load_normalized_text() for review in reviews]
             )
@@ -149,7 +155,7 @@ class DataProcessor:
                 self._count_vectors_scaler.partial_fit([word_count_vector])
 
                 with review.word_count_vector_pth.open('wb') as f:
-                    torch.save(torch.tensor(word_count_vector), f)
+                    torch.save(torch.tensor(word_count_vector).to_sparse(), f)
 
             pos_count_matrix = self._count_vectorizer.generate_pos_count_vectors(
                 [review.load_normalized_text() for review in reviews]
@@ -171,24 +177,24 @@ class DataProcessor:
                                     desc='Generating BERT-based features',
                                     unit='restaurant'):
 
-            for review in path_handler.iter_reviews_for(restaurant):
+            reviews = list(path_handler.iter_reviews_for(restaurant))
 
-                word_embeddings, sentence_embeddings = (
-                    self._embeddings_generator.get_bert_embeddings(review.load_normalized_text())
-                )
+            if all(review.bert_embeddings_pth.exists() and review.trace_features_pth.exists()
+                   for review in reviews):
+                continue
+
+            embeddings_batch = self._embeddings_generator.get_bert_embeddings(
+                [review.load_normalized_text() for review in reviews]
+            )
+
+            for review, embeddings in zip(reviews, embeddings_batch):
 
                 with review.bert_embeddings_pth.open('wb') as f:
-                    torch.save(torch.stack(sentence_embeddings), f)
+                    torch.save(torch.stack(embeddings.sentence_embeddings), f)
 
                 trace_features = self._num_features_extractor.generate_trace_features(
-                    word_embeddings=torch.cat(word_embeddings, dim=0)
+                    word_embeddings=torch.cat(embeddings.word_embeddings, dim=0)
                 )
-
-                for trace_feature in trace_features:
-                    scaler = self._trace_features_scaler[
-                        (trace_feature['chunk_length'], trace_feature['step_size'])]
-                    scaler.partial_fit(
-                        [[trace_feature['trace_velocity'], trace_feature['trace_volume']]])
 
                 with review.trace_features_pth.open('w', encoding='utf-8') as f:
                     json.dump(trace_features, f, ensure_ascii=False, indent=4)
@@ -230,6 +236,36 @@ class DataProcessor:
                         'location_index': location_index
                     }, f, ensure_ascii=False, indent=4)
 
+    def _calculate_scaling_parameters(self, processed_ds_path: pathlib.Path) -> None:
+        """Calculates scaling parameters for all supported features."""
+
+        path_handler = processed_ds_structs.ProcessedDsPathHandler(processed_ds_path)
+
+        for restaurant in tqdm.tqdm(path_handler.iter_restaurants(),
+                                    desc='Calculating scaling parameters',
+                                    unit='restaurant'):
+
+            for review in path_handler.iter_reviews_for(restaurant):
+
+                with review.trace_features_pth.open('r', encoding='utf-8') as f:
+                    trace_features = json.load(f)
+
+                for trace_feature in trace_features:
+                    scaler = self._trace_features_scaler[
+                        (trace_feature['chunk_length'], trace_feature['step_size'])]
+                    scaler.partial_fit(
+                        [[trace_feature['trace_velocity'], trace_feature['trace_volume']]])
+
+                with review.word_count_vector_pth.open('rb') as f:
+                    word_count_vector = torch.load(f).to_dense().numpy()
+
+                self._count_vectors_scaler.partial_fit([word_count_vector])
+
+                with review.pos_count_vector_pth.open('rb') as f:
+                    pos_count_vector = torch.load(f).numpy()
+
+                self._pos_vectors_scaler.partial_fit([pos_count_vector])
+
     def _normalize_and_save_review_drafts(self,
                                           raw_dataset: raw_ds_structs.RawDataset,
                                           processed_ds_path: pathlib.Path) -> None:
@@ -245,12 +281,16 @@ class DataProcessor:
                                     desc=f'Normalizing reviews for {restaurant.name}',
                                     unit='review',
                                     leave=False):
-                normalized_text = processing_utils.normalize_text(review.text)
 
                 review_draft = path_handler.create_new_review(
                     restaurant=restaurant,
                     raw_review=review
                 )
+
+                if review_draft.normalized_text_pth.exists():
+                    continue
+
+                normalized_text = processing_utils.normalize_text(review.text)
 
                 with review_draft.normalized_text_pth.open('w', encoding='utf-8') as f:
                     f.write(normalized_text)
