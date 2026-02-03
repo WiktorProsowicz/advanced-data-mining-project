@@ -39,7 +39,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
     embeddings_generator = embeddings.EmbeddingGenerator(
         embeddings.EmbeddingGeneratorConfig.model_validate(cfg.bert_embedding_generator_cfg),
-        device=cfg.bert_device
+        batch_size=cfg.bert_batch_size,
+        device=cfg.bert_device,
     )
 
     num_features_extractor = num_features.NumericalFeaturesExtractor(
