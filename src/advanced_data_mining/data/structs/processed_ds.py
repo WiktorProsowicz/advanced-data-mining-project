@@ -6,6 +6,7 @@ import json
 from typing import Iterator
 
 import pydantic
+import torch
 
 from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.utils import misc as misc_utils
@@ -86,6 +87,20 @@ class ProcessingMetadataPathHandler:
             cfg = json.load(f)
 
         return [tuple(chunk_setup) for chunk_setup in cfg['chunk_and_step_sizes']]
+
+    def get_trace_scaling_params(self) -> dict[tuple[int, int], tuple[torch.Tensor, torch.Tensor]]:
+        """Returns the scaling parameters for trace features."""
+
+        scaling_params: dict[tuple[int, int], tuple[torch.Tensor, torch.Tensor]] = {}
+
+        for chunk_size, step_size in self.get_chunk_and_step_sizes():
+
+            pth = (self.scaling_metadata_path /
+                   f'trace_features_mean_std_chunk_{chunk_size}_step_{step_size}.pt')
+
+            scaling_params[(chunk_size, step_size)] = torch.load(pth)
+
+        return scaling_params
 
 
 class ProcessedReview(pydantic.BaseModel):
