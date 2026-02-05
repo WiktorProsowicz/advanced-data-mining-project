@@ -2,14 +2,16 @@
 
 import pathlib
 import json
-from typing import Iterator
+from typing import Any, Iterator
 
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import tqdm
 
 from advanced_data_mining.data.eda import utils as eda_utils
 from advanced_data_mining.data.structs import processed_ds
+from advanced_data_mining.data import ds_loading
 
 
 class ProcessedDatasetAnalyzer:
@@ -60,26 +62,23 @@ class ProcessedDatasetAnalyzer:
 
         general_stats = {}
 
-        for chunk_size, step_size in self._metadata_path_handler.get_chunk_and_step_sizes():
+        for trace_spec in trace_features_df['trace_spec'].unique():
 
-            sub_df = trace_features_df[
-                (trace_features_df['chunk_length'] == chunk_size) &
-                (trace_features_df['step_size'] == step_size)
-            ]
+            sub_df = trace_features_df[trace_features_df['trace_spec'] == trace_spec]
 
             self._save_trace_features_distributions(
                 sub_df,
                 hue_col='is_translated',
-                output_path=output_dir / f'trace_cs_{chunk_size}_ss_{step_size}_by_translated.svg'
+                output_path=output_dir / f'{trace_spec}_by_translated.svg'
             )
 
             self._save_trace_features_distributions(
                 sub_df,
                 hue_col='rating',
-                output_path=output_dir / f'trace_cs_{chunk_size}_ss_{step_size}_by_rating.svg'
+                output_path=output_dir / f'{trace_spec}_by_rating.svg'
             )
 
-            general_stats[f'chunk_{chunk_size}_step_{step_size}'] = (
+            general_stats[trace_spec] = (
                 sub_df[['trace_velocity', 'trace_volume']]
                 .describe(percentiles=[0.1, .05, .25, .5, .75, .9, .95, .99],).to_dict()
             )
@@ -87,41 +86,64 @@ class ProcessedDatasetAnalyzer:
         with (output_dir / 'general_stats.json').open('w', encoding='utf-8') as f:
             json.dump(general_stats, f, ensure_ascii=False, indent=4)
 
-    def _generate_trace_features_df(self) -> Iterator[dict[str, str]]:
+    def _generate_trace_features_df(self) -> Iterator[dict[str, Any]]:
         """Generates a DataFrame containing trace features for all reviews."""
 
-        for restaurant in self._ds_path_handler.iter_restaurants():
-            for review in self._ds_path_handler.iter_reviews_for(restaurant):
-                with review.trace_features_pth.open('r', encoding='utf-8') as f:
-                    trace_features = json.load(f)
+        ds = ds_loading.ProcessedDataset(
+            ds_loading.ProcessedDatasetConfig(
+                use_trace_features=None,
+                use_categorized_features=[]
+            ),
+            metadata_handler=self._metadata_path_handler,
+            samples=[
+                review for restaurant in self._ds_path_handler.iter_restaurants()
+                for review in self._ds_path_handler.iter_reviews_for(restaurant)
+            ]
+        )
 
-                with review.num_features_pth.open('r', encoding='utf-8') as f:
-                    num_features = json.load(f)
+        for sample_idx in tqdm.tqdm(range(len(ds)),
+                                    desc='Generating trace features dataframe',
+                                    unit='samples'):
+            sample_data = ds[sample_idx]
+            sample_metadata = ds.get_raw_sample(sample_idx)
 
-                for feature in trace_features:
+            for key in sample_data:
+                if key.startswith('trace_'):
                     yield {
-                        'chunk_length': feature['chunk_length'],
-                        'step_size': feature['step_size'],
-                        'trace_velocity': feature['trace_velocity'],
-                        'trace_volume': feature['trace_volume'],
-                        'is_translated': num_features['is_translated'],
-                        'rating': num_features['rating']
+                        'trace_spec': key,
+                        'trace_velocity': float(sample_data[key][0]),
+                        'trace_volume': float(sample_data[key][1]),
+                        'rating': int(sample_data['rating']),
+                        'is_translated': sample_metadata.is_translated
                     }
 
-    def _generate_numerical_features_df(self) -> Iterator[dict[str, str]]:
+    def _generate_numerical_features_df(self) -> Iterator[dict[str, Any]]:
         """Generates a DataFrame containing numerical features for all reviews."""
 
-        for restaurant in self._ds_path_handler.iter_restaurants():
-            for review in self._ds_path_handler.iter_reviews_for(restaurant):
-                with review.num_features_pth.open('r', encoding='utf-8') as f:
-                    num_features = json.load(f)
+        ds = ds_loading.ProcessedDataset(
+            ds_loading.ProcessedDatasetConfig(
+                use_trace_features=[],
+                use_categorized_features=None
+            ),
+            metadata_handler=self._metadata_path_handler,
+            samples=[
+                review for restaurant in self._ds_path_handler.iter_restaurants()
+                for review in self._ds_path_handler.iter_reviews_for(restaurant)
+            ]
+        )
 
-                yield {
-                    **num_features['encoded_cat_options'],
-                    'n_author_reviews_index': num_features['n_author_reviews_index'],
-                    'is_translated': num_features['is_translated'],
-                    'rating': num_features['rating']
-                }
+        for sample_idx in tqdm.tqdm(range(len(ds)),
+                                    desc='Generating numerical features dataframe',
+                                    unit='samples'):  # pylint: disable=consider-using-enumerate
+            sample_data = ds[sample_idx]
+            sample_metadata = ds.get_raw_sample(sample_idx)
+
+            yield {
+                **{name: int(feature) for name, feature in sample_data.items()},
+                'n_author_reviews_index': sample_metadata.n_author_reviews_index,
+                'is_translated': sample_metadata.is_translated,
+                'location_index': sample_metadata.location_index
+            }
 
     def _save_cat_feature_distribution(self,
                                        features_df: pd.DataFrame,
