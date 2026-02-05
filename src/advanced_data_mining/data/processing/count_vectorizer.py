@@ -48,13 +48,17 @@ class CountVectorizer:
             cfg_dict = json.load(f)
             cfg = CountVectorizerConfig.model_validate(cfg_dict)
 
-        return cls(cfg, word_vectorizer, doc_frequency_vector, pos_vectorizer)
+        with path.joinpath('documents_count').open('r') as f:
+            documents_count = int(f.read())
+
+        return cls(cfg, word_vectorizer, doc_frequency_vector, pos_vectorizer, documents_count)
 
     def __init__(self,
                  cfg: CountVectorizerConfig,
                  word_vectorizer: SklearnCountVectorizer | None,
                  doc_frequency_vector: np.ndarray | None,
-                 pos_vectorizer: SklearnCountVectorizer | None) -> None:
+                 pos_vectorizer: SklearnCountVectorizer | None,
+                 documents_count: int | None) -> None:
 
         nltk.download('stopwords', quiet=True)
         nltk.download('punkt_tab', quiet=True)
@@ -63,6 +67,11 @@ class CountVectorizer:
         nltk.download('universal_tagset', quiet=True)
 
         self._cfg = cfg
+
+        if documents_count is None:
+            self._documents_count = 0
+        else:
+            self._documents_count = documents_count
 
         if doc_frequency_vector is None:
             self._doc_frequency_vector = np.array([], dtype=np.int32)
@@ -93,6 +102,8 @@ class CountVectorizer:
 
         self._word_vectorizer.fit(docs)
         self._pos_vectorizer.fit(map(self._pos_tag_document, docs))
+
+        self._documents_count = len(docs)
 
         self._doc_frequency_vector = np.zeros(
             len(self._word_vectorizer.vocabulary_), dtype=np.int32)
@@ -136,6 +147,9 @@ class CountVectorizer:
         with output_dir.joinpath('pos_count_vocabulary.json').open('w') as f:
             json.dump({w: int(cnt) for w, cnt in self._pos_vectorizer.vocabulary_.items()},
                       f, indent=4, ensure_ascii=False)
+
+        with output_dir.joinpath('documents_count').open('w') as f:
+            f.write(str(self._documents_count))
 
     def _pos_tag_document(self, document: str) -> str:
         """Generates a space-separated string of POS tags for the given document."""
