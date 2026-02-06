@@ -68,20 +68,38 @@ class ProcessedDatasetAnalyzer:
 
             self._save_trace_features_distributions(
                 sub_df,
-                hue_col='is_translated',
+                hue='Is Translated',
+                cmap=eda_utils.get_gradient_palette(2),
                 output_path=output_dir / f'{trace_spec}_by_translated.svg'
             )
 
             self._save_trace_features_distributions(
                 sub_df,
-                hue_col='rating',
+                hue='Rating',
+                cmap=eda_utils.get_coolwarm_cmap(),
                 output_path=output_dir / f'{trace_spec}_by_rating.svg'
+            )
+
+            self._save_trace_features_distributions(
+                sub_df,
+                hue='Number of sentences',
+                cmap=eda_utils.get_gradient_cmap(),
+                output_path=output_dir / f'{trace_spec}_by_n_sentences.svg'
+            )
+
+            self._save_trace_features_distributions(
+                sub_df,
+                hue='Number of words',
+                cmap=eda_utils.get_gradient_cmap(),
+                output_path=output_dir / f'{trace_spec}_by_n_words.svg'
             )
 
             general_stats[trace_spec] = (
                 sub_df[['trace_velocity', 'trace_volume']]
-                .describe(percentiles=[0.1, .05, .25, .5, .75, .9, .95, .99],).to_dict()
+                .describe(percentiles=[0.01, .05, .25, .5, .75, .9, .95, .99],).to_dict()
             )
+
+            general_stats[trace_spec]['n_zeros'] = sub_df[sub_df['trace_volume'] == 0.0].shape[0]
 
         with (output_dir / 'general_stats.json').open('w', encoding='utf-8') as f:
             json.dump(general_stats, f, ensure_ascii=False, indent=4)
@@ -113,8 +131,10 @@ class ProcessedDatasetAnalyzer:
                         'trace_spec': key,
                         'trace_velocity': float(sample_data[key][0]),
                         'trace_volume': float(sample_data[key][1]),
-                        'rating': int(sample_data['rating']),
-                        'is_translated': sample_metadata.is_translated
+                        'Rating': int(sample_data['rating']),
+                        'Is Translated': sample_metadata.is_translated,
+                        'Number of words': sample_metadata.n_words,
+                        'Number of sentences': sample_metadata.n_sentences
                     }
 
     def _generate_numerical_features_df(self) -> Iterator[dict[str, Any]]:
@@ -192,7 +212,8 @@ class ProcessedDatasetAnalyzer:
 
     def _save_trace_features_distributions(self,
                                            trace_features_df: pd.DataFrame,
-                                           hue_col: str,
+                                           hue: str | pd.Series,
+                                           cmap: Any,
                                            output_path: pathlib.Path) -> None:
         """Saves the distributions of trace features to the output directory."""
 
@@ -202,14 +223,12 @@ class ProcessedDatasetAnalyzer:
         mean_volume = trace_features_df['trace_volume'].mean()
 
         sns.scatterplot(
-            data=(trace_features_df
-                  .groupby(hue_col)
-                  .apply(lambda x: x.sample(1000, random_state=42), include_groups=False)),
+            data=trace_features_df.sample(1000, random_state=42),
             x='trace_velocity',
             y='trace_volume',
-            hue=hue_col,
-            alpha=0.6,
-            palette=eda_utils.get_gradient_palette(n=trace_features_df[hue_col].nunique()),
+            hue=hue,
+            alpha=0.8,
+            palette=cmap,
             ax=ax
         )
 
@@ -219,7 +238,7 @@ class ProcessedDatasetAnalyzer:
                    linestyle='--', label='Mean Volume', alpha=0.3)
         ax.legend()
 
-        ax.set_title('Trace features distribution')
+        ax.set_title(f'Trace features distribution (by \'{hue}\' feature)')
         ax.set_xlabel('Trace Velocity')
         ax.set_ylabel('Trace Volume')
         ax.grid(True, linestyle='--')

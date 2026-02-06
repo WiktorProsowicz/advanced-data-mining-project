@@ -24,6 +24,8 @@ class SampleMetadata:
     n_author_reviews_index: int
     location_index: int
     is_translated: bool
+    n_words: int
+    n_sentences: int
 
 
 class ProcessedDatasetConfig(pydantic.BaseModel):
@@ -117,7 +119,9 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             restaurant_info=sample.restaurant_info,
             n_author_reviews_index=num_features['n_author_reviews_index'],
             location_index=num_features['location_index'],
-            is_translated=num_features['is_translated']
+            is_translated=num_features['is_translated'],
+            n_sentences=num_features['n_sentences'],
+            n_words=num_features['n_words']
         )
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
@@ -216,27 +220,26 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
                                   sample: processed_ds.ProcessedReview) -> dict[str, torch.Tensor]:
         """Loads word count vector features for a given sample."""
 
-        if self._cfg.word_count_vector_type is not None:
+        if self._cfg.word_count_vector_type is None:
+            return {}
 
-            word_count_vector = torch.load(sample.word_count_vector_pth)
+        word_count_vector = torch.load(sample.word_count_vector_pth)
 
-            if self._top_k_indices is not None:
-                word_count_vector = word_count_vector[self._top_k_indices]
+        if self._top_k_indices is not None:
+            word_count_vector = word_count_vector[self._top_k_indices]
 
-            if self._cfg.word_count_vector_type == 'count_normalized':
-                word_count_vector = (
-                    word_count_vector - self._word_count_mean) / self._word_count_std
+        if self._cfg.word_count_vector_type == 'count_normalized':
+            word_count_vector = (
+                word_count_vector - self._word_count_mean) / self._word_count_std
 
-            if self._cfg.word_count_vector_type == 'tfidf':
-                tf = word_count_vector / word_count_vector.sum()
-                idf = torch.log((1 + self._documents_count) /
-                                (1 + self._doc_frequency_vector)) + 1.0
+        if self._cfg.word_count_vector_type == 'tfidf':
+            tf = word_count_vector / word_count_vector.sum()
+            idf = torch.log((1 + self._documents_count) /
+                            (1 + self._doc_frequency_vector)) + 1.0
 
-                word_count_vector = tf * idf
+            word_count_vector = tf * idf
 
-            return {
-                'word_count_vector': word_count_vector,
-                'doc_frequency_vector': self._doc_frequency_vector
-            }
-
-        return {}
+        return {
+            'word_count_vector': word_count_vector,
+            'doc_frequency_vector': self._doc_frequency_vector
+        }
