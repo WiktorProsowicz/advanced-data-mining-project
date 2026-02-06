@@ -1,4 +1,4 @@
-"""Prepares a set of resources used to process datasets.
+"""Processes data used for training and generates processing metadata.
 
 The generated metadata is used to ensure consistency between the training and testing processing
 pipelines. The recources are also designed to contain all necessary information to extract features
@@ -34,7 +34,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
         count_vectorizer.CountVectorizerConfig.model_validate(cfg.count_vectorizer_cfg),
         word_vectorizer=None,
         doc_frequency_vector=None,
-        pos_vectorizer=None
+        pos_vectorizer=None,
+        documents_count=None
     )
 
     embeddings_generator = embeddings.EmbeddingGenerator(

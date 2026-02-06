@@ -233,7 +233,9 @@ class DataProcessor:
                         'n_author_reviews_index': n_author_reviews_index,
                         'is_translated': review.raw_review.original is not None,
                         'rating': int(review.raw_review.rating),
-                        'location_index': location_index
+                        'location_index': location_index,
+                        'n_words': num_features.num_words(review.load_normalized_text()),
+                        'n_sentences': num_features.num_sentences(review.load_normalized_text())
                     }, f, ensure_ascii=False, indent=4)
 
     def _calculate_scaling_parameters(self, processed_ds_path: pathlib.Path) -> None:
