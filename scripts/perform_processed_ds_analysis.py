@@ -34,6 +34,8 @@ def main(script_cfg: omegaconf.DictConfig) -> None:
 
     analyzer.save_trace_features_stats(base_output_dir / 'trace_features_stats/')
 
+    analyzer.save_word_count_stats(base_output_dir / 'word_count_stats/')
+
 
 if __name__ == '__main__':
     main()  # pylint: disable=no-value-for-parameter

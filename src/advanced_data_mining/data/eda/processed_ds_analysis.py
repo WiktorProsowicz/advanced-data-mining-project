@@ -8,6 +8,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import tqdm
+import numpy as np
 
 from advanced_data_mining.data.eda import utils as eda_utils
 from advanced_data_mining.data.structs import processed_ds
@@ -103,6 +104,43 @@ class ProcessedDatasetAnalyzer:
 
         with (output_dir / 'general_stats.json').open('w', encoding='utf-8') as f:
             json.dump(general_stats, f, ensure_ascii=False, indent=4)
+
+    def save_word_count_stats(self, output_dir: pathlib.Path) -> None:
+        """Saves statistics about word counts in reviews to the output path."""
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        doc_freq_path = (self._metadata_path_handler.count_vectorizer_path /
+                         'doc_frequency_vector.npy')
+        doc_freq = np.load(doc_freq_path)
+
+        with (self._metadata_path_handler.count_vectorizer_path
+              .joinpath('documents_count')
+              .open('r', encoding='utf-8')) as f:
+            documents_count = int(f.read().strip())
+
+        with (self._metadata_path_handler.count_vectorizer_path
+              .joinpath('word_count_vocabulary.json')
+              .open('r', encoding='utf-8')) as f:
+            vocab = json.load(f)
+            vocab = {word_idx: word for word, word_idx in vocab.items()}
+
+        general_stats = {
+            'total_documents': documents_count,
+            'vocabulary_size': len(vocab),
+            '40_most_common_words': [
+                vocab[idx] for idx in np.argsort(doc_freq)[-40:][::-1]
+            ],
+            '40_least_common_words': [
+                vocab[idx] for idx in np.argsort(doc_freq)[:40]
+            ]
+        }
+
+        with (output_dir / 'word_count_stats.json').open('w', encoding='utf-8') as f:
+            json.dump(general_stats, f, ensure_ascii=False, indent=4)
+
+        self._save_doc_frequency_distribution(doc_freq,
+                                              output_dir / 'doc_frequency_distribution.svg')
 
     def _generate_trace_features_df(self) -> Iterator[dict[str, Any]]:
         """Generates a DataFrame containing trace features for all reviews."""
@@ -243,4 +281,28 @@ class ProcessedDatasetAnalyzer:
         ax.grid(True, linestyle='--')
         ax.set_axisbelow(True)
 
+        fig.savefig(output_path)
+
+    def _save_doc_frequency_distribution(self,
+                                         doc_freq: np.ndarray,
+                                         output_path: pathlib.Path) -> None:
+        """Saves the distribution of document frequencies to the output directory."""
+
+        n_words_bins = (0, 100, 500, 1000, 5000, len(doc_freq))
+
+        fig, ax = plt.subplots(len(n_words_bins) - 1, figsize=(8, 10))
+
+        for idx, (lower_lim, upper_lim) in enumerate(zip(n_words_bins[:-1], n_words_bins[1:])):
+
+            sns.histplot(doc_freq[np.argsort(doc_freq)[::-1][lower_lim:upper_lim]], bins=100,
+                         ax=ax[idx], color=eda_utils.MIDDLE_COLOR_STD, alpha=0.8)
+
+            ax[idx].set_title(
+                f'Doc frequency distribution for {lower_lim}:{upper_lim} most common words')
+            ax[idx].set_xlabel('Document Frequency')
+            ax[idx].set_ylabel('Count')
+            ax[idx].grid(True, linestyle='--')
+            ax[idx].set_axisbelow(True)
+
+        fig.tight_layout()
         fig.savefig(output_path)
