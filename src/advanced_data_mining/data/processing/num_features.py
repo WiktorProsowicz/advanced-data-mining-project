@@ -60,53 +60,16 @@ class NumericalFeaturesExtractor:
             cfg_dict = json.load(f)
             cfg = NumericalFeaturesExtractorCfg.model_validate(cfg_dict)
 
-        with path.joinpath('known_locations.json').open('r', encoding='utf-8') as f:
-            known_locations = json.load(f)
+        return cls(cfg)
 
-        return cls(cfg, known_locations)
-
-    def __init__(self,
-                 cfg: NumericalFeaturesExtractorCfg,
-                 known_locations: list[str] | None) -> None:
+    def __init__(self, cfg: NumericalFeaturesExtractorCfg) -> None:
 
         self._cfg = cfg
-
-        if known_locations is None:
-            self._known_locations = []
-
-        else:
-            self._known_locations = known_locations
 
     @property
     def cfg(self) -> NumericalFeaturesExtractorCfg:
         """Returns the configuration of the NumericalFeaturesExtractor."""
         return self._cfg
-
-    def fit(self, review_drafts: list[processed_ds.ProcessedReview]) -> None:
-        """Fits the extractor on the given review drafts.
-
-        The method does no assumptions about the presence of any pre-processed data in the review
-        drafts, except for the raw restaurant and review.
-        """
-
-        for review in review_drafts:
-            if review.restaurant_info.primary_location not in self._known_locations:
-                self._known_locations.append(review.restaurant_info.primary_location)
-
-    def generate_location_onehot_index(self,
-                                       location: str | None) -> int:
-        """Generates one-hot index for the given location.
-
-        If location is None, index is 0. If location is unknown, index is len(known_locations) + 1.
-        """
-
-        if location is None:
-            return 0
-
-        if location not in self._known_locations:
-            return len(self._known_locations) + 1
-
-        return self._known_locations.index(location) + 1
 
     def generate_cat_options_onehot_indices(self,
                                             categorized_options: dict[str, str]
@@ -176,9 +139,6 @@ class NumericalFeaturesExtractor:
 
         with output_dir.joinpath('config.json').open('w', encoding='utf-8') as f:
             json.dump(self._cfg.model_dump(), f, ensure_ascii=False, indent=4)
-
-        with output_dir.joinpath('known_locations.json').open('w', encoding='utf-8') as f:
-            json.dump(self._known_locations, f, ensure_ascii=False, indent=4)
 
     def _calc_trace_velocity(self,
                              chunks: list[torch.Tensor]) -> float:

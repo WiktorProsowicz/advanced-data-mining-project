@@ -161,8 +161,7 @@ class ProcessedDatasetAnalyzer:
             yield {
                 **{name: int(feature) for name, feature in sample_data.items()},
                 'n_author_reviews_index': sample_metadata.n_author_reviews_index,
-                'is_translated': sample_metadata.is_translated,
-                'location_index': sample_metadata.location_index
+                'is_translated': sample_metadata.is_translated
             }
 
     def _save_cat_feature_distribution(self,

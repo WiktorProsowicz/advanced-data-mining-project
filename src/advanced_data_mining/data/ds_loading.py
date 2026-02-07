@@ -22,7 +22,6 @@ class SampleMetadata:
     review: raw_ds.Review
     restaurant_info: raw_ds.Restaurant
     n_author_reviews_index: int
-    location_index: int
     is_translated: bool
     n_words: int
     n_sentences: int
@@ -118,7 +117,6 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             review=sample.raw_review,
             restaurant_info=sample.restaurant_info,
             n_author_reviews_index=num_features['n_author_reviews_index'],
-            location_index=num_features['location_index'],
             is_translated=num_features['is_translated'],
             n_sentences=num_features['n_sentences'],
             n_words=num_features['n_words']

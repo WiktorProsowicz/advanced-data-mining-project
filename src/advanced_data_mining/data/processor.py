@@ -63,13 +63,6 @@ class DataProcessor:
                                     for review
                                     in path_handler.iter_reviews_for(restaurant)])
 
-        _logger().info('Fitting the NumericalFeaturesExtractor...')
-
-        self._num_features_extractor.fit([review
-                                          for restaurant in path_handler.iter_restaurants()
-                                          for review
-                                          in path_handler.iter_reviews_for(restaurant)])
-
         self._generate_count_features(output_dir)
 
         self._generate_bert_features(output_dir)
@@ -223,17 +216,12 @@ class DataProcessor:
                                           .generate_n_author_reviews_onehot_index(
                                               review.raw_review.author.n_reviews))
 
-                location_index = (self._num_features_extractor
-                                  .generate_location_onehot_index(
-                                      review.restaurant_info.primary_location))
-
                 with review.num_features_pth.open('w', encoding='utf-8') as f:
                     json.dump({
                         'encoded_cat_options': encoded_cat_options,
                         'n_author_reviews_index': n_author_reviews_index,
                         'is_translated': review.raw_review.original is not None,
                         'rating': int(review.raw_review.rating),
-                        'location_index': location_index,
                         'n_words': num_features.num_words(review.load_normalized_text()),
                         'n_sentences': num_features.num_sentences(review.load_normalized_text())
                     }, f, ensure_ascii=False, indent=4)
