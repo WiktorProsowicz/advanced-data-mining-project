@@ -91,8 +91,8 @@ class EmbeddingGenerator:
                     sentence_embedding = sentence_hidden_states[0]
                     token_embeddings = sentence_hidden_states[1: sentence_size + 1]
 
-                    embeddings.word_embeddings.append(token_embeddings)
-                    embeddings.sentence_embeddings.append(sentence_embedding)
+                    embeddings.word_embeddings.append(token_embeddings.cpu())
+                    embeddings.sentence_embeddings.append(sentence_embedding.cpu())
 
                 embeddings_list.append(embeddings)
 
