@@ -6,7 +6,7 @@ import pathlib
 import tqdm
 
 import torch
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 
 from advanced_data_mining.data.processing import count_vectorizer
 from advanced_data_mining.data.processing import embeddings as embeddings_processing
@@ -33,8 +33,8 @@ class DataProcessor:
         self._embeddings_generator = embeddings_generator
         self._num_features_extractor = num_features_extractor
 
-        self._count_vectors_scaler = StandardScaler()
-        self._pos_vectors_scaler = StandardScaler()
+        self._count_vectors_scaler = MaxAbsScaler()
+        self._pos_vectors_scaler = MaxAbsScaler()
 
         self._trace_features_scaler = {
             (chunk_size, step_size): StandardScaler()
@@ -106,16 +106,14 @@ class DataProcessor:
         metadata_path_handler.scaling_metadata_path.mkdir(parents=True, exist_ok=True)
 
         with (metadata_path_handler.scaling_metadata_path
-              .joinpath('count_vectors_mean_std.pt')
+              .joinpath('count_vectors_scale.pt')
               .open('wb')) as f:
-            torch.save((torch.tensor(self._count_vectors_scaler.mean_),
-                        torch.tensor(self._count_vectors_scaler.scale_)), f)
+            torch.save(torch.tensor(self._count_vectors_scaler.scale_), f)
 
         with (metadata_path_handler.scaling_metadata_path
-              .joinpath('pos_vectors_mean_std.pt')
+              .joinpath('pos_vectors_scale.pt')
               .open('wb')) as f:
-            torch.save((torch.tensor(self._pos_vectors_scaler.mean_),
-                        torch.tensor(self._pos_vectors_scaler.scale_)), f)
+            torch.save(torch.tensor(self._pos_vectors_scaler.scale_), f)
 
         for (chunk_size, step_size), scaler in self._trace_features_scaler.items():
             with (metadata_path_handler.scaling_metadata_path
@@ -145,8 +143,6 @@ class DataProcessor:
 
             for review, word_count_vector in zip(reviews, word_count_matrix):
 
-                self._count_vectors_scaler.partial_fit([word_count_vector])
-
                 with review.word_count_vector_pth.open('wb') as f:
                     torch.save(torch.tensor(word_count_vector).to_sparse(), f)
 
@@ -155,8 +151,6 @@ class DataProcessor:
             )
 
             for review, pos_count_vector in zip(reviews, pos_count_matrix):
-
-                self._pos_vectors_scaler.partial_fit([pos_count_vector])
 
                 with review.pos_count_vector_pth.open('wb') as f:
                     torch.save(torch.tensor(pos_count_vector), f)
@@ -249,12 +243,12 @@ class DataProcessor:
                 with review.word_count_vector_pth.open('rb') as f:
                     word_count_vector = torch.load(f).to_dense().numpy()
 
-                self._count_vectors_scaler.partial_fit([word_count_vector])
+                self._count_vectors_scaler.partial_fit(word_count_vector.reshape(1, -1))
 
                 with review.pos_count_vector_pth.open('rb') as f:
                     pos_count_vector = torch.load(f).numpy()
 
-                self._pos_vectors_scaler.partial_fit([pos_count_vector])
+                self._pos_vectors_scaler.partial_fit(pos_count_vector.reshape(1, -1))
 
     def _normalize_and_save_review_drafts(self,
                                           raw_dataset: raw_ds_structs.RawDataset,
