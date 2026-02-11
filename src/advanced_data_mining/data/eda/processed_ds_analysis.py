@@ -7,6 +7,7 @@ from typing import Any, Iterator
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import torch
 import tqdm
 import numpy as np
 
@@ -114,6 +115,10 @@ class ProcessedDatasetAnalyzer:
                          'doc_frequency_vector.npy')
         doc_freq = np.load(doc_freq_path)
 
+        w_count_scaling_path = (self._metadata_path_handler.scaling_metadata_path /
+                                'count_vectors_scale.pt')
+        word_count_scale = torch.load(w_count_scaling_path)
+
         with (self._metadata_path_handler.count_vectorizer_path
               .joinpath('documents_count')
               .open('r', encoding='utf-8')) as f:
@@ -141,6 +146,11 @@ class ProcessedDatasetAnalyzer:
 
         self._save_doc_frequency_distribution(doc_freq,
                                               output_dir / 'doc_frequency_distribution.svg')
+
+        self._save_word_frequency_vs_count_scale_distribution(
+            doc_freq,
+            word_count_scale.numpy(),
+            output_dir / 'doc_frequency_vs_word_count_scale.svg')
 
     def _generate_trace_features_df(self) -> Iterator[dict[str, Any]]:
         """Generates a DataFrame containing trace features for all reviews."""
@@ -305,4 +315,29 @@ class ProcessedDatasetAnalyzer:
             ax[idx].set_axisbelow(True)
 
         fig.tight_layout()
+        fig.savefig(output_path)
+
+    def _save_word_frequency_vs_count_scale_distribution(self,
+                                                         doc_freq: np.ndarray,
+                                                         word_count_scale: np.ndarray,
+                                                         output_path: pathlib.Path) -> None:
+        """Saves scatter distribution of word-wise features."""
+
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        sns.scatterplot(
+            x=doc_freq,
+            y=word_count_scale,
+            alpha=0.8,
+            color=eda_utils.MIDDLE_COLOR_STD,
+            ax=ax
+        )
+
+        ax.set_title('Document Frequency vs Word Count Scale')
+        ax.set_xlabel('Document Frequency')
+        ax.set_ylabel('Word Count Scale')
+        ax.set_xscale('log')
+        ax.grid(True, linestyle='--')
+        ax.set_axisbelow(True)
+
         fig.savefig(output_path)
