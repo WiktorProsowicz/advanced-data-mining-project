@@ -42,7 +42,7 @@ class ProcessedDatasetConfig(pydantic.BaseModel):
                      'binary - presence/absence of words;'
                      'count - raw word counts;'
                      'tfidf - term frequency-inverse document frequency;'
-                     'count_normalized - word counts normalized to 0 mean 1 variance.')
+                     'count_normalized - word counts normalized to [0, 1] scale.')
     )] = None
 
     use_top_k_words: Annotated[int | None, Field(
@@ -50,9 +50,11 @@ class ProcessedDatasetConfig(pydantic.BaseModel):
                      'all words will be used.')
     )] = None
 
-    use_pos_count_vectors: Annotated[bool, Field(
-        description=('Whether to load part-of-speech count vectors as features.')
-    )] = False
+    pos_count_vector_type: Annotated[Literal['count', 'count_normalized'] | None, Field(
+        description=('Type of part-of-speech count vector to load. Options are:'
+                     'count - raw counts of each part of speech;'
+                     'count_normalized - counts normalized to [0, 1] scale.)')
+    )] = None
 
     use_categorized_features: Annotated[list[str] | None, Field(
         description=('List of categorized features to load. If None, all categorized features will'
@@ -83,10 +85,12 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
 
         doc_freq_pth = self._metadata_handler.count_vectorizer_path / 'doc_frequency_vector.npy'
         word_count_scaling_pth = (self._metadata_handler.scaling_metadata_path /
-                                  'count_vectors_mean_std.pt')
+                                  'count_vectors_scale.pt')
 
         self._doc_frequency_vector = torch.from_numpy(np.load(doc_freq_pth))
-        self._word_count_mean, self._word_count_std = torch.load(word_count_scaling_pth)
+        self._word_count_scale = torch.load(word_count_scaling_pth)
+        self._pos_count_scale = torch.load(self._metadata_handler.scaling_metadata_path /
+                                           'pos_vectors_scale.pt')
 
         with (self._metadata_handler.count_vectorizer_path / 'documents_count').open('r') as f:
             self._documents_count = int(f.read())
@@ -99,8 +103,7 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             self._top_k_indices = torch.topk(self._doc_frequency_vector,
                                              self._cfg.use_top_k_words).indices
             self._doc_frequency_vector = self._doc_frequency_vector[self._top_k_indices]
-            self._word_count_mean = self._word_count_mean[self._top_k_indices]
-            self._word_count_std = self._word_count_std[self._top_k_indices]
+            self._word_count_scale = self._word_count_scale[self._top_k_indices]
 
     def __len__(self) -> int:
         return len(self._samples)
@@ -140,8 +143,12 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
 
         data.update(self._load_word_count_features(sample))
 
-        if self._cfg.use_pos_count_vectors:
+        if self._cfg.pos_count_vector_type is not None:
             data['pos_count_vector'] = torch.load(sample.pos_count_vector_pth)
+
+            if self._cfg.pos_count_vector_type == 'count_normalized':
+                data['pos_count_vector'] = torch.clip(data['pos_count_vector'] /
+                                                      self._pos_count_scale, 0, 1)
 
         supported_cat_features = self._supported_categorized_features()
 
@@ -221,14 +228,13 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
         if self._cfg.word_count_vector_type is None:
             return {}
 
-        word_count_vector = torch.load(sample.word_count_vector_pth)
+        word_count_vector = torch.load(sample.word_count_vector_pth).to_dense()
 
         if self._top_k_indices is not None:
             word_count_vector = word_count_vector[self._top_k_indices]
 
         if self._cfg.word_count_vector_type == 'count_normalized':
-            word_count_vector = (
-                word_count_vector - self._word_count_mean) / self._word_count_std
+            word_count_vector = torch.clip(word_count_vector / self._word_count_scale, 0, 1)
 
         if self._cfg.word_count_vector_type == 'tfidf':
             tf = word_count_vector / word_count_vector.sum()
@@ -238,6 +244,5 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             word_count_vector = tf * idf
 
         return {
-            'word_count_vector': word_count_vector,
-            'doc_frequency_vector': self._doc_frequency_vector
+            'word_count_vector': word_count_vector
         }
