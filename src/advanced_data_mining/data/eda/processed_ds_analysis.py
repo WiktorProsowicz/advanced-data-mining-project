@@ -256,6 +256,7 @@ class ProcessedDatasetAnalyzer:
             graph.ax.set_ylim(0, 1)
 
         graph.savefig(output_path)
+        plt.close(graph.figure)
 
     def _save_trace_features_distributions(self,
                                            trace_features_df: pd.DataFrame,
@@ -292,6 +293,7 @@ class ProcessedDatasetAnalyzer:
         ax.set_axisbelow(True)
 
         fig.savefig(output_path)
+        plt.close(fig)
 
     def _save_doc_frequency_distribution(self,
                                          doc_freq: np.ndarray,
@@ -316,6 +318,7 @@ class ProcessedDatasetAnalyzer:
 
         fig.tight_layout()
         fig.savefig(output_path)
+        plt.close(fig)
 
     def _save_word_frequency_vs_count_scale_distribution(self,
                                                          doc_freq: np.ndarray,
@@ -341,3 +344,4 @@ class ProcessedDatasetAnalyzer:
         ax.set_axisbelow(True)
 
         fig.savefig(output_path)
+        plt.close(fig)
