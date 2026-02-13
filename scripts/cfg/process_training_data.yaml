@@ -1,0 +1,53 @@
+raw_ds_path: data/raw_reviews_poland
+processed_ds_path: tmp/processed_reviews_poland
+processing_metadata_path: tmp/processing_metadata_poland
+bert_device: cuda
+bert_batch_size: 4
+bert_embedding_generator_cfg:
+  model_name: microsoft/deberta-v2-xxlarge
+  max_sequence_length: 64
+count_vectorizer_cfg:
+  max_vocabulary_size: 20000
+  skip_stop_words: true
+  pos_tagset: universal
+numerical_features_extractor_cfg:
+  chunk_and_step_sizes:
+    - [3, 1]
+    - [5, 2]
+    - [5, 5]
+    - [7, 3]
+
+  categorized_options_used:
+    - name: "Meal type"
+      supported_values:
+        - "Lunch"
+        - "Dinner"
+        - "Other"
+        - "Brunch"
+        - "Breakfast"
+    - name: "Service"
+      supported_values:
+        - "Dine in"
+        - "Take out"
+        - "Delivery"
+    - name: "Price per person"
+      supported_values:
+        - "zł 1-20"
+        - "zł 20-40"
+        - "zł 40-60"
+        - "zł 60-80"
+        - "zł 80-100"
+
+  n_author_reviews_quantization:
+    - cat_name: "Up to 10"
+      min_val: 0
+      max_val: 10
+    - cat_name: "10 to 50"
+      min_val: 11
+      max_val: 50
+    - cat_name: "50 to 100"
+      min_val: 51
+      max_val: 100
+    - cat_name: "100 to 175"
+      min_val: 101
+      max_val: 175
