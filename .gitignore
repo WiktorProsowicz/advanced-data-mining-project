@@ -4,7 +4,9 @@ advanced_data_mining.egg-info/
 tmp/
 log/
 __pycache__/
-mlruns/
-tensorboard/
 .vscode/
 .mypy_cache/
+
+mlflow_tracking.db
+mlflow_artifacts/
+tensorboard/

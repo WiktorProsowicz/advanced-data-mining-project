@@ -13,7 +13,7 @@ dependencies = [
     "transformers[sentencepiece]>=4.57.6",
     "torch>=2.8.0",
     "lightning>=2.5.5",
-    "mlflow>=3.6.0",
+    "mlflow>=3.9.0",
     "tensorboard>=2.20.0",
     "dvc==3.66.1",
     "dvc-gdrive==3.0.1",
@@ -39,7 +39,7 @@ disable = [
     "too-many-locals",
     "R0801"
 ]
-ignore = "*torchkan.py"
+ignore = "torchkan.py"
 
 
 [tool.autopep8]
