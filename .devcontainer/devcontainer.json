@@ -38,8 +38,13 @@
 	// Configure tool-specific properties.
 	// "customizations": {},
 	"runArgs": [
-		"--gpus", "all",
+		"--gpus",
+		"all",
 		"--shm-size",
-		"512m"
+		"512m",
+		"-p",
+		"5000:5000",
+		"-p",
+		"5001:5001"
 	]
 }

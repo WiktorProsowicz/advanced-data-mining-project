@@ -6,111 +6,122 @@ from typing import Tuple
 import lightning as pl
 import torch
 import torchmetrics
+import pydantic
 
-from advanced_data_mining.model import modules
+from advanced_data_mining.model.modules import LinguisticEncoder
+from advanced_data_mining.model.modules import NumFeaturesEncoder
+from advanced_data_mining.model.modules import PostNet, CatFeatureEncoder
+
+
+class OptimizerConfiguration(pydantic.BaseModel):
+    """Configuration for optimizer."""
+    lr: float = 0.001
+    weight_decay: float = 0.0001
+
+
+class TrainingConfiguration(pydantic.BaseModel):
+    """Configuration for training."""
+    classification_classes_weights: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0, 1.0)
+    reg_loss_weight: float = 0.3
+    cl_loss_weight: float = 1.0
+
+
+class ModelConfiguration(pydantic.BaseModel):
+    """Configuration for model architecture."""
+    bert_encoder: LinguisticEncoder.Configuration | None
+    word_count_encoder: LinguisticEncoder.Configuration | None
+    pos_count_encoder: NumFeaturesEncoder.Configuration | None
+    cat_features_encoders: dict[str, CatFeatureEncoder.Configuration] | None
+    supported_trace_features: list[str]
+    num_features_encoder: NumFeaturesEncoder.Configuration | None
+
+    post_net: PostNet.Configuration
 
 
 class RatingPredictor(pl.LightningModule):
     """Predicts restaurant ratings based on specified input features."""
 
     def __init__(self,
-                 model_cfg: Dict[str, Any],
-                 training_cfg: Dict[str, Any],
-                 optimizer_cfg: Dict[str, Any]):
+                 model_cfg: ModelConfiguration,
+                 training_cfg: TrainingConfiguration,
+                 optimizer_cfg: OptimizerConfiguration):
 
         super().__init__()
 
         self.save_hyperparameters()
 
-        self._bow_encoders = torch.nn.ModuleDict({
-            model_name: modules.BOWEncoder(**model_cfg)
-            for model_name, model_cfg
-            in model_cfg['bow_encoders'].items()
-            if model_cfg is not None
-        })
+        self._encoders: torch.nn.ModuleDict = torch.nn.ModuleDict({})
 
-        self._num_features_encoder = None
-        self._supported_num_features = []
+        if model_cfg.bert_encoder is not None:
+            self._encoders['bert'] = LinguisticEncoder(model_cfg.bert_encoder)
 
-        num_feat_enc_cfg = model_cfg['numerical_feature_encoder']
-        if num_feat_enc_cfg is not None:
-            self._num_features_encoder = modules.NumFeaturesEncoder(
-                **num_feat_enc_cfg['params']
-            )
+        if model_cfg.word_count_encoder is not None:
+            self._encoders['word_count'] = LinguisticEncoder(model_cfg.word_count_encoder)
 
-            self._supported_num_features = num_feat_enc_cfg['supported_features']
+        if model_cfg.pos_count_encoder is not None:
+            self._encoders['pos_count'] = NumFeaturesEncoder(model_cfg.pos_count_encoder)
 
-        self._postnet = modules.PostNet(**model_cfg['post_net'])
+        if model_cfg.num_features_encoder is not None:
+            self._encoders['num_features'] = NumFeaturesEncoder(
+                model_cfg.num_features_encoder)
+
+        self._cat_encoders = torch.nn.ModuleDict({})
+
+        if model_cfg.cat_features_encoders is not None:
+            for feature_name, encoder_cfg in model_cfg.cat_features_encoders.items():
+                self._cat_encoders[feature_name] = CatFeatureEncoder(encoder_cfg)
+
+        self._postnet = PostNet(model_cfg.post_net)
 
         self._training_cfg = training_cfg
         self._optimizer_cfg = optimizer_cfg
-
-        def train_metrics_cl(label: str, n_classes: int) -> torchmetrics.MetricCollection:
-            return torchmetrics.MetricCollection({
-                f'cl_accuracy_weighted_{label}': torchmetrics.Accuracy(task='multiclass',
-                                                                       num_classes=n_classes,
-                                                                       average='weighted'),
-                f'cl_accuracy_macro_{label}': torchmetrics.Accuracy(task='multiclass',
-                                                                    num_classes=n_classes,
-                                                                    average='macro'),
-                f'cl_f1_score_{label}': torchmetrics.F1Score(task='multiclass',
-                                                             num_classes=n_classes,
-                                                             average='weighted'),
-                f'cl_recall_{label}': torchmetrics.Recall(task='multiclass',
-                                                          num_classes=n_classes,
-                                                          average='weighted'),
-                f'cl_precision_{label}': torchmetrics.Precision(task='multiclass',
-                                                                num_classes=n_classes,
-                                                                average='weighted')
-            }, prefix='train/')
-
-        self._train_metrics_cl = train_metrics_cl('fine', n_classes=5)
-        self._train_coarse_metrics_cl = train_metrics_cl('coarse', n_classes=3)
-        self._train_mae = torchmetrics.MeanAbsoluteError()
-        self._train_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass', num_classes=5)
-
-        self._val_metrics_cl = self._train_metrics_cl.clone(prefix='val/')
-        self._val_coarse_metrics_cl = self._train_coarse_metrics_cl.clone(prefix='val/')
-        self._val_mae = torchmetrics.MeanAbsoluteError()
-        self._val_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass', num_classes=5)
-
-        self._test_metrics_cl = self._train_metrics_cl.clone(prefix='test/')
-        self._test_coarse_metrics_cl = self._train_coarse_metrics_cl.clone(prefix='test/')
-        self._test_mae = torchmetrics.MeanAbsoluteError()
-        self._test_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass', num_classes=5)
+        self._supported_trace_features = model_cfg.supported_trace_features
 
         self._reg_loss = torch.nn.MSELoss()
-        self._cl_loss = torch.nn.CrossEntropyLoss(weight=torch.tensor(
-            training_cfg['classification_classes_weights']
-        ))
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(
-            self.parameters(),
-            **self._optimizer_cfg
+        self._cl_loss = torch.nn.CrossEntropyLoss(
+            weight=torch.tensor(training_cfg.classification_classes_weights)
         )
 
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        return torch.optim.Adam(self.parameters(),
+                                lr=self._optimizer_cfg.lr,
+                                weight_decay=self._optimizer_cfg.weight_decay)
+
     def forward(self,  # pylint: disable=arguments-differ
-                x: Dict[str, torch.Tensor]) -> torch.Tensor:
+                inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Predicts rating based on input features."""
 
-        encoded_bow_features = [
-            self._bow_encoders[model_name](x[model_name])
-            for model_name in self._bow_encoders
-        ]
+        encoded_num = torch.tensor([], device=self.device)
+        encoded_word_count = torch.tensor([], device=self.device)
+        encoded_pos_count = torch.tensor([], device=self.device)
+        encoded_bert = torch.tensor([], device=self.device)
+        encoded_cat_features = torch.tensor([], device=self.device)
 
-        if self._num_features_encoder is not None:
-            encoded_num_features = self._num_features_encoder(
-                torch.cat(
-                    [x[feature_name] for feature_name in self._supported_num_features],
-                    dim=-1
-                )
-            )
+        if self._cat_encoders:
+            encoded_cat_features = torch.cat([encoder(inputs[feature_name])
+                                              for feature_name, encoder
+                                              in self._cat_encoders.items()], dim=-1)
 
-            combined_features = torch.cat(encoded_bow_features + [encoded_num_features], dim=-1)
+        if 'num_features' in self._encoders:
+            input_trace_features = torch.cat([inputs[feature]
+                                              for feature
+                                              in self._supported_trace_features], dim=-1)
 
-        else:
-            combined_features = torch.cat(encoded_bow_features, dim=-1)
+            encoded_num = self._encoders['num_features'](
+                torch.cat([input_trace_features, encoded_cat_features], dim=-1))
+
+        if 'word_count' in self._encoders:
+            encoded_word_count = self._encoders['word_count'](inputs['word_count_vector'])
+
+        if 'pos_count' in self._encoders:
+            encoded_pos_count = self._encoders['pos_count'](inputs['pos_count_vector'])
+
+        if 'bert' in self._encoders:
+            encoded_bert = self._encoders['bert'](inputs['bert_embeddings'],
+                                                  inputs.get('n_sentences'))
+
+        combined_features = torch.cat([encoded_num, encoded_word_count,
+                                      encoded_pos_count, encoded_bert], dim=-1)
 
         return self._postnet(combined_features)  # type: ignore[no-any-return]
 
@@ -118,150 +129,35 @@ class RatingPredictor(pl.LightningModule):
                       batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Performs training step."""
 
-        regression_pred, classification_pred = self.forward(batch)
+        regression_pred, classification_pred = self(batch)
 
         total_loss, reg_loss, cl_loss = self._calc_losses(
             regression_pred, classification_pred, batch
         )
 
-        self.log_dict({
-            'train/regression_mse': reg_loss,
-            'train/classification_cross_entropy': cl_loss
-        }, on_step=True)
-
-        self._train_metrics_cl(classification_pred,
-                               batch['review_rating'].long() - 1)
-        self.log_dict(self._train_metrics_cl, on_step=True)
-
-        self._train_mae(regression_pred, batch['review_rating'])
-        self.log('train/regression_mae', self._train_mae, on_step=True)
-
-        self._train_conf_mat.update(classification_pred,
-                                    batch['review_rating'].long() - 1)
-
-        coarse_preds, coarse_labels = self._fine_to_coarse(classification_pred,
-                                                           batch['review_rating'].long() - 1)
-
-        self._train_coarse_metrics_cl(coarse_preds, coarse_labels)
-        self.log_dict(self._train_coarse_metrics_cl, on_step=True)
+        self.log('train/reg_loss', reg_loss, on_step=True, prog_bar=True)
+        self.log('train/cl_loss', cl_loss, on_step=True, prog_bar=True)
 
         return total_loss
 
     def on_train_epoch_end(self) -> None:
-
-        tensorboard = self.loggers[1].experiment  # type: ignore
-
-        fig, _ = self._train_metrics_cl.plot(together=True)
-        tensorboard.add_figure(
-            'train/classification_metrics', fig, self.current_epoch
-        )
-
-        fig, _ = self._train_conf_mat.plot()
-
-        tensorboard.add_figure(
-            'train/confusion_matrix', fig, self.current_epoch
-        )
-
-        self._train_conf_mat.reset()
+        pass
 
     def validation_step(self,  # pylint: disable=arguments-differ
                         batch: Dict[str, torch.Tensor]) -> None:
         """Performs validation step."""
 
-        regression_pred, classification_pred = self.forward(batch)
+        regression_pred, classification_pred = self(batch)
 
         _, reg_loss, cl_loss = self._calc_losses(
             regression_pred, classification_pred, batch
         )
 
-        self.log_dict({
-            'val/regression_mse': reg_loss,
-            'val/classification_cross_entropy': cl_loss
-        }, on_epoch=True)
-
-        self._val_metrics_cl.update(classification_pred,
-                                    batch['review_rating'].long() - 1)
-        self._val_conf_mat.update(classification_pred,
-                                  batch['review_rating'].long() - 1)
-        self._val_mae.update(regression_pred, batch['review_rating'])
-
-        coarse_preds, coarse_labels = self._fine_to_coarse(classification_pred,
-                                                           batch['review_rating'].long() - 1)
-
-        self._val_coarse_metrics_cl.update(coarse_preds, coarse_labels)
+        self.log('val/reg_loss', reg_loss, on_epoch=True, prog_bar=True)
+        self.log('val/cl_loss', cl_loss, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
-
-        tensorboard = self.loggers[1].experiment  # type: ignore
-
-        self.log_dict(self._val_metrics_cl.compute())
-        self.log('val/regression_mae', self._val_mae.compute())
-        self.log_dict(self._val_coarse_metrics_cl.compute())
-
-        fig, _ = self._val_metrics_cl.plot(together=True)
-        tensorboard.add_figure(
-            'val/classification_metrics', fig, self.current_epoch
-        )
-
-        fig, _ = self._val_conf_mat.plot()
-
-        tensorboard.add_figure(
-            'val/confusion_matrix', fig, self.current_epoch
-        )
-
-        self._val_conf_mat.reset()
-        self._val_metrics_cl.reset()
-        self._val_mae.reset()
-
-    def test_step(self,  # pylint: disable=arguments-differ
-                  batch: Dict[str, torch.Tensor]) -> None:
-        """Performs test step."""
-
-        regression_pred, classification_pred = self.forward(batch)
-
-        _, reg_loss, cl_loss = self._calc_losses(
-            regression_pred, classification_pred, batch
-        )
-
-        self.log_dict({
-            'test/regression_mse': reg_loss,
-            'test/classification_cross_entropy': cl_loss
-        }, on_epoch=True)
-
-        self._test_metrics_cl.update(classification_pred,
-                                     batch['review_rating'].long() - 1)
-
-        self._test_conf_mat.update(classification_pred,
-                                   batch['review_rating'].long() - 1)
-        self._test_mae.update(regression_pred, batch['review_rating'])
-
-        coarse_preds, coarse_labels = self._fine_to_coarse(classification_pred,
-                                                           batch['review_rating'].long() - 1)
-
-        self._test_coarse_metrics_cl.update(coarse_preds, coarse_labels)
-
-    def on_test_epoch_end(self) -> None:
-
-        tensorboard = self.loggers[1].experiment  # type: ignore
-
-        self.log_dict(self._test_metrics_cl.compute())
-        self.log('test/regression_mae', self._test_mae.compute())
-        self.log_dict(self._test_coarse_metrics_cl.compute())
-
-        fig, _ = self._test_metrics_cl.plot(together=True)
-        tensorboard.add_figure(
-            'test/classification_metrics', fig, self.current_epoch
-        )
-
-        fig, _ = self._test_conf_mat.plot()
-
-        tensorboard.add_figure(
-            'test/confusion_matrix', fig, self.current_epoch
-        )
-
-        self._test_conf_mat.reset()
-        self._test_metrics_cl.reset()
-        self._test_mae.reset()
+        pass
 
     def sanitize_outputs(self,
                          reg_outputs: torch.Tensor,
@@ -280,26 +176,27 @@ class RatingPredictor(pl.LightningModule):
                      cl_outputs: torch.Tensor,
                      batch: Dict[str, torch.Tensor]
                      ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Calculates total and individual losses for regression and classification outputs."""
 
-        loss_fn_regression = self._reg_loss(reg_outputs,
-                                            batch['review_rating'])
-        loss_fn_classification = self._cl_loss(cl_outputs,
-                                               batch['review_rating'].long() - 1)
+        reg_loss = self._reg_loss(reg_outputs,
+                                  batch['rating'].to(torch.float32))
+        cl_loss = self._cl_loss(cl_outputs,
+                                batch['rating'] - 1)
 
         total_loss = (
-            self._training_cfg['reg_loss_weight'] * loss_fn_regression +
-            self._training_cfg['cl_loss_weight'] * loss_fn_classification
+            self._training_cfg.reg_loss_weight * reg_loss +
+            self._training_cfg.cl_loss_weight * cl_loss
         )
 
-        return total_loss, loss_fn_regression, loss_fn_classification
+        return total_loss, reg_loss, cl_loss
 
     @torch.no_grad()
     def _fine_to_coarse(self,
-                        fine_logits: torch.Tensor,
+                        fine_probs: torch.Tensor,
                         fine_labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Converts fine-grained 5-class logits to coarse-grained 3-class labels."""
+        """Converts fine-grained 5-class probabilities to coarse-grained 3-class labels."""
 
-        fine_predictions = torch.argmax(fine_logits, dim=-1)
+        fine_predictions = torch.argmax(fine_probs, dim=-1)
 
         coarse_preds = torch.zeros_like(fine_predictions)
         coarse_preds[fine_predictions <= 1] = 0
