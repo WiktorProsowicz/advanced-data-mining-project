@@ -3,11 +3,13 @@ import json
 import logging
 from typing import Literal, Annotated
 import dataclasses
+import pathlib
 
 import pydantic
 from pydantic import Field
 import torch
 import numpy as np
+import lightning.pytorch as pl
 
 from advanced_data_mining.data.structs import raw_ds, processed_ds
 
@@ -87,10 +89,10 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
         word_count_scaling_pth = (self._metadata_handler.scaling_metadata_path /
                                   'count_vectors_scale.pt')
 
-        self._doc_frequency_vector = torch.from_numpy(np.load(doc_freq_pth))
-        self._word_count_scale = torch.load(word_count_scaling_pth)
+        self._doc_frequency_vector = torch.from_numpy(np.load(doc_freq_pth)).to(torch.float32)
+        self._word_count_scale = torch.load(word_count_scaling_pth).to(torch.float32)
         self._pos_count_scale = torch.load(self._metadata_handler.scaling_metadata_path /
-                                           'pos_vectors_scale.pt')
+                                           'pos_vectors_scale.pt').to(torch.float32)
 
         with (self._metadata_handler.count_vectorizer_path / 'documents_count').open('r') as f:
             self._documents_count = int(f.read())
@@ -125,6 +127,44 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             n_words=num_features['n_words']
         )
 
+    def collate_fn(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
+        """Custom collate function to handle variable-length features."""
+
+        collated_batch: dict[str, torch.Tensor] = {}
+
+        for feat_name in self._supported_categorized_features() + ['rating']:
+            collated_batch[feat_name] = torch.stack([sample[feat_name] for sample in batch])
+
+        for cs, ss in self._supported_trace_features():
+            collated_batch[f'trace_cs_{cs}_ss_{ss}'] = torch.stack(
+                [sample[f'trace_cs_{cs}_ss_{ss}'] for sample in batch]
+            )
+
+        if self._cfg.word_count_vector_type is not None:
+            collated_batch['word_count_vector'] = torch.stack([sample['word_count_vector']
+                                                               for sample in batch])
+
+        if self._cfg.use_bert_embeddings is not None:
+
+            if self._cfg.use_bert_embeddings == 'sentence':
+                collated_batch['bert_embeddings'] = torch.nn.utils.rnn.pad_sequence(
+                    [sample['bert_embeddings'] for sample in batch],
+                    batch_first=True,
+                    padding_value=0.0
+                )
+                collated_batch['n_sentences'] = torch.tensor([sample['n_sentences']
+                                                              for sample in batch])
+
+            else:
+                collated_batch['bert_embeddings'] = torch.stack([sample['bert_embeddings']
+                                                                 for sample in batch])
+
+        if self._cfg.pos_count_vector_type is not None:
+            collated_batch['pos_count_vector'] = torch.stack([sample['pos_count_vector']
+                                                              for sample in batch])
+
+        return collated_batch
+
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
 
         sample = self._samples[idx]
@@ -144,7 +184,7 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
         data.update(self._load_word_count_features(sample))
 
         if self._cfg.pos_count_vector_type is not None:
-            data['pos_count_vector'] = torch.load(sample.pos_count_vector_pth)
+            data['pos_count_vector'] = torch.load(sample.pos_count_vector_pth).to(torch.float32)
 
             if self._cfg.pos_count_vector_type == 'count_normalized':
                 data['pos_count_vector'] = torch.clip(data['pos_count_vector'] /
@@ -228,7 +268,7 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
         if self._cfg.word_count_vector_type is None:
             return {}
 
-        word_count_vector = torch.load(sample.word_count_vector_pth).to_dense()
+        word_count_vector = torch.load(sample.word_count_vector_pth).to_dense().to(torch.float32)
 
         if self._top_k_indices is not None:
             word_count_vector = word_count_vector[self._top_k_indices]
@@ -237,7 +277,7 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             word_count_vector = torch.clip(word_count_vector / self._word_count_scale, 0, 1)
 
         if self._cfg.word_count_vector_type == 'tfidf':
-            tf = word_count_vector / word_count_vector.sum()
+            tf = word_count_vector / (word_count_vector.sum() + 1e-8)
             idf = torch.log((1 + self._documents_count) /
                             (1 + self._doc_frequency_vector)) + 1.0
 
@@ -246,3 +286,82 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
         return {
             'word_count_vector': word_count_vector
         }
+
+
+class ProcessedDataModule(pl.LightningDataModule):
+    """LightningDataModule for the processed dataset."""
+
+    def __init__(self,
+                 ds_cfg: ProcessedDatasetConfig,
+                 ds_path: pathlib.Path,
+                 metadata_path: pathlib.Path,
+                 batch_size: int,
+                 n_workers: int,
+                 train_val_split: float):
+        super().__init__()
+
+        self._ds_path_handler = processed_ds.ProcessedDsPathHandler(ds_path)
+        self._metadata_handler = processed_ds.ProcessingMetadataPathHandler(metadata_path)
+        self._ds_cfg = ds_cfg
+        self._batch_size = batch_size
+        self._n_workers = n_workers
+        self._train_val_split = train_val_split
+
+        self._train_dataset: ProcessedDataset | None = None
+        self._val_dataset: ProcessedDataset | None = None
+        self._test_dataset: ProcessedDataset | None = None
+
+    def setup(self, stage: str | None = None) -> None:
+        """Initializes datasets for the specified stage (fit or test)."""
+
+        all_samples = list(self._ds_path_handler.iter_all_reviews())
+
+        if stage in (None, 'fit'):
+            split_idx = int(len(all_samples) * self._train_val_split)
+            train_samples = all_samples[:split_idx]
+            val_samples = all_samples[split_idx:]
+
+            self._train_dataset = ProcessedDataset(self._ds_cfg,
+                                                   self._metadata_handler,
+                                                   train_samples)
+            self._val_dataset = ProcessedDataset(self._ds_cfg,
+                                                 self._metadata_handler,
+                                                 val_samples)
+
+        if stage in (None, 'test'):
+            self._test_dataset = ProcessedDataset(self._ds_cfg,
+                                                  self._metadata_handler,
+                                                  all_samples)
+
+    def train_dataloader(self) -> torch.utils.data.DataLoader[dict[str, torch.Tensor]]:
+        """Returns DataLoader for the training set."""
+
+        assert self._train_dataset is not None, 'Train dataset not initialized'
+
+        return torch.utils.data.DataLoader(self._train_dataset,
+                                           batch_size=self._batch_size,
+                                           num_workers=self._n_workers,
+                                           shuffle=True,
+                                           collate_fn=self._train_dataset.collate_fn)
+
+    def val_dataloader(self) -> torch.utils.data.DataLoader[dict[str, torch.Tensor]]:
+        """Returns DataLoader for the validation set."""
+
+        assert self._val_dataset is not None, 'Validation dataset not initialized'
+
+        return torch.utils.data.DataLoader(self._val_dataset,
+                                           batch_size=self._batch_size,
+                                           num_workers=self._n_workers,
+                                           shuffle=False,
+                                           collate_fn=self._val_dataset.collate_fn)
+
+    def test_dataloader(self) -> torch.utils.data.DataLoader[dict[str, torch.Tensor]]:
+        """Returns DataLoader for the test set."""
+
+        assert self._test_dataset is not None, 'Test dataset not initialized'
+
+        return torch.utils.data.DataLoader(self._test_dataset,
+                                           batch_size=self._batch_size,
+                                           num_workers=self._n_workers,
+                                           shuffle=False,
+                                           collate_fn=self._test_dataset.collate_fn)

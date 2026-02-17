@@ -98,7 +98,8 @@ class ProcessingMetadataPathHandler:
             pth = (self.scaling_metadata_path /
                    f'trace_features_mean_std_chunk_{chunk_size}_step_{step_size}.pt')
 
-            scaling_params[(chunk_size, step_size)] = torch.load(pth)
+            scaling_params[(chunk_size, step_size)] = tuple(t.to(torch.float32)
+                                                            for t in torch.load(pth))
 
         return scaling_params
 
@@ -187,6 +188,12 @@ class ProcessedDsPathHandler:
             yield self._review_from_path(review_path=review_dir,
                                          restaurant_info=restaurant,
                                          raw_review=review)
+
+    def iter_all_reviews(self) -> Iterator[ProcessedReview]:
+        """Loads all processed reviews in the dataset."""
+
+        for restaurant in self.iter_restaurants():
+            yield from self.iter_reviews_for(restaurant)
 
     def _review_from_path(self,
                           review_path: pathlib.Path,
