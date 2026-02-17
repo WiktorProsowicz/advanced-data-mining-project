@@ -5,6 +5,7 @@ and the training hyperparameters. The pipeline has its associated MLFlow run.
 """
 import logging
 import os
+import pathlib
 
 import hydra
 import lightning as pl
@@ -19,33 +20,46 @@ from advanced_data_mining.utils import logging_utils
 
 
 def _logger() -> logging.Logger:
-    return logging.getLogger(__name__)
+    return logging.getLogger('advanced_data_mining')
 
 
 @hydra.main(version_base=None, config_path='cfg', config_name='train_model')
 def main(cfg: omegaconf.DictConfig) -> None:
     """Runs the model training pipeline."""
 
-    if cfg.train_cfg.seed is not None:
-        pl.seed_everything(cfg.train_cfg.seed, workers=True)
-
-    experiment = mlflow.set_experiment(cfg.run_cfg.mlflow_experiment)
+    if cfg.run_cfg.seed is not None:
+        pl.seed_everything(cfg.run_cfg.seed, workers=True)
 
     model = rating_predictor.RatingPredictor(
-        model_cfg=omegaconf.OmegaConf.to_container(cfg.model_cfg),  # type: ignore
-        training_cfg=omegaconf.OmegaConf.to_container(cfg.train_cfg),  # type: ignore
-        optimizer_cfg=omegaconf.OmegaConf.to_container(cfg.optimizer_cfg)  # type: ignore
+        rating_predictor.ModelConfiguration.model_validate(
+            omegaconf.OmegaConf.to_container(cfg.model_cfg)
+        ),
+        rating_predictor.TrainingConfiguration.model_validate(
+            omegaconf.OmegaConf.to_container(cfg.train_cfg)
+        ),
+        rating_predictor.OptimizerConfiguration.model_validate(
+            omegaconf.OmegaConf.to_container(cfg.optimizer_cfg)
+        )
     )
 
     data_module = ds_loading.ProcessedDataModule(
-        **omegaconf.OmegaConf.to_container(cfg.data_cfg)  # type: ignore
+        ds_cfg=ds_loading.ProcessedDatasetConfig.model_validate(
+            omegaconf.OmegaConf.to_container(cfg.data_loader_cfg)
+        ),
+        ds_path=pathlib.Path(cfg.run_cfg.ds_path),
+        metadata_path=pathlib.Path(cfg.run_cfg.ds_metadata_path),
+        batch_size=cfg.run_cfg.batch_size,
+        n_workers=cfg.run_cfg.n_workers,
+        train_val_split=cfg.run_cfg.train_val_split
     )
+
+    mlflow.set_tracking_uri(cfg.run_cfg.mlflow_server_uri)
+    experiment = mlflow.set_experiment(cfg.run_cfg.mlflow_experiment)
 
     with mlflow.start_run(run_name=cfg.run_cfg.mlflow_run) as run:
 
-        run_path = os.path.join('mlruns', experiment.experiment_id, run.info.run_id)
-
-        logging_utils.setup_logging('train_model', os.path.join(run_path, 'logs'))
+        logging_utils.setup_logging('train_model',
+                                    os.path.join(mlflow.get_artifact_uri(), 'logs'))
 
         _logger().info('Running training with configuration:\n%s',
                        omegaconf.OmegaConf.to_yaml(cfg))
@@ -53,11 +67,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
         trainer = pl.Trainer(
             accelerator='auto',
             devices='auto',
-            max_epochs=cfg.train_cfg.max_epochs,
+            max_epochs=cfg.run_cfg.max_epochs,
             logger=[
                 pl_loggers.MLFlowLogger(
                     experiment_name=cfg.run_cfg.mlflow_experiment,
                     run_name=cfg.run_cfg.mlflow_run,
+                    tracking_uri=cfg.run_cfg.mlflow_server_uri,
                     run_id=run.info.run_id),
                 pl_loggers.TensorBoardLogger(
                     save_dir='tensorboard',
@@ -67,18 +82,18 @@ def main(cfg: omegaconf.DictConfig) -> None:
             ],
             callbacks=[
                 pl_callbacks.ModelCheckpoint(
-                    dirpath=os.path.join(run_path, 'checkpoints'),
-                    monitor='val/cl_accuracy_weighted_fine',
-                    mode='max',
+                    dirpath=os.path.join(mlflow.get_artifact_uri(), 'checkpoints'),
+                    monitor='val/cl_loss',
+                    mode='min',
                     save_top_k=1,
                     every_n_epochs=1),
                 pl_callbacks.EarlyStopping(
-                    monitor='val/classification_cross_entropy', min_delta=0.0,
-                    patience=cfg.train_cfg.early_stopping_patience,
+                    monitor='val/cl_loss', min_delta=0.0,
+                    patience=cfg.run_cfg.early_stopping_patience,
                     mode='min'),
-                pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.optimizer_cfg.lr,
-                                                       swa_epoch_start=1,
-                                                       annealing_epochs=3)
+                pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.run_cfg.swa_lr,
+                                                       swa_epoch_start=cfg.run_cfg.swa_start,
+                                                       annealing_epochs=cfg.run_cfg.swa_anneal)
             ],
             num_sanity_val_steps=0,
             enable_checkpointing=True,
@@ -90,10 +105,6 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         trainer.fit(model,
                     datamodule=data_module)
-
-        trainer.test(model,
-                     datamodule=data_module,
-                     ckpt_path='best')
 
 
 if __name__ == '__main__':
