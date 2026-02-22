@@ -158,8 +158,8 @@ class PostNet(torch.nn.Module):
             [
                 torch.nn.Sequential(
                     torch.nn.Linear(in_dim, out_dim),
-                    torch.nn.ReLU(),
                     torch.nn.BatchNorm1d(out_dim),
+                    torch.nn.ReLU(),
                     torch.nn.Dropout(cfg.dropout_rate)
                 ) for in_dim, out_dim in zip(
                     [cfg.input_dim] + cfg.hidden_dims[:-1], cfg.hidden_dims
@@ -167,16 +167,16 @@ class PostNet(torch.nn.Module):
             ]
         )
 
+        self._classification_output = torch.nn.Linear(cfg.hidden_dims[-1], 5)
+        self._translation_classification_output = torch.nn.Linear(cfg.hidden_dims[-1], 1)
         self._regression_output = torch.nn.Linear(cfg.hidden_dims[-1], 1)
-        self._classification_output = torch.nn.Sequential(
-            torch.nn.Linear(cfg.hidden_dims[-1], 5),
-            torch.nn.Softmax(dim=-1)
-        )
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """Processes combined feature representation to produce final output."""
 
         for layer in self._layers:
             x = layer(x)
 
-        return self._regression_output(x).squeeze(-1), self._classification_output(x)
+        return (self._classification_output(x),
+                self._translation_classification_output(x).squeeze(1),
+                self._regression_output(x).squeeze(1))

@@ -30,8 +30,8 @@ data_loader_cfg:
 
 train_cfg:
   classification_classes_weights: [0.09, 0.28, 0.33, 0.28, 0.03]
-  reg_loss_weight: 0.0
-  cl_loss_weight: 1.0
+  reg_loss_weight: null
+  translation_cl_loss_weight: null
 
 optimizer_cfg:
   lr: 0.001

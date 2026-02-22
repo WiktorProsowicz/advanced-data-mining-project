@@ -1,8 +1,9 @@
 """Contains definition of Rating Predictor model."""
-from typing import Any
 from typing import Dict
 from typing import Tuple
+from typing import Annotated
 
+from pydantic import Field
 import lightning as pl
 import torch
 import torchmetrics
@@ -21,9 +22,18 @@ class OptimizerConfiguration(pydantic.BaseModel):
 
 class TrainingConfiguration(pydantic.BaseModel):
     """Configuration for training."""
-    classification_classes_weights: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0, 1.0)
-    reg_loss_weight: float = 0.3
-    cl_loss_weight: float = 1.0
+    classification_classes_weights: Annotated[tuple[float, ...], Field(
+        description='Weights for each rating class in classification loss.'
+    )] = (1.0, 1.0, 1.0, 1.0, 1.0)
+
+    reg_loss_weight: Annotated[float | None, Field(
+        description='Weight for regression loss. If None, regression loss is not used.'
+    )] = None
+
+    translation_cl_loss_weight: Annotated[float | None, Field(
+        description=('Weight for loss guiding the classification of translated reviews.'
+                     'If None, translation classification loss is not used.')
+    )] = None
 
 
 class ModelConfiguration(pydantic.BaseModel):
@@ -78,6 +88,7 @@ class RatingPredictor(pl.LightningModule):
         self._supported_trace_features = model_cfg.supported_trace_features
 
         self._reg_loss = torch.nn.MSELoss()
+        self._translation_cl_loss = torch.nn.CrossEntropyLoss()
         self._cl_loss = torch.nn.CrossEntropyLoss(
             weight=torch.tensor(training_cfg.classification_classes_weights)
         )
@@ -157,7 +168,37 @@ class RatingPredictor(pl.LightningModule):
         self.log('val/cl_loss', cl_loss, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
-        pass
+
+
+    def _calculate_losses(self,
+                          cl_preds: torch.Tensor,
+                          translation_cl_preds: torch.Tensor,
+                          reg_preds: torch.Tensor,
+                          batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        """Calculates and returns individual losses for each output head."""
+
+        cl_loss = self._cl_loss(cl_preds, batch['rating'] - 1)
+        total_loss = cl_loss
+
+        losses: Dict[str, torch.Tensor] = {
+            'rating_cl_cross_entropy': cl_loss
+        }
+
+        if self._training_cfg.translation_cl_loss_weight is not None:
+            translation_cl_loss = self._translation_cl_loss(
+                translation_cl_preds, batch['is_translated'])
+            losses['translation_cl_cross_entropy'] = translation_cl_loss
+            total_loss += self._training_cfg.translation_cl_loss_weight * translation_cl_loss
+
+        if self._training_cfg.reg_loss_weight is not None:
+            reg_loss = self._reg_loss(reg_preds.squeeze(-1), batch['rating'].float())
+            losses['rating_reg_mse'] = reg_loss
+            total_loss += self._training_cfg.reg_loss_weight * reg_loss
+
+        return {
+            **losses,
+            'total_loss': total_loss
+        }
 
     def sanitize_outputs(self,
                          reg_outputs: torch.Tensor,
@@ -170,25 +211,6 @@ class RatingPredictor(pl.LightningModule):
         reg_sanitized_out = reg_possible_values[bucket_indices]
 
         return torch.argmax(cl_outputs, -1), reg_sanitized_out
-
-    def _calc_losses(self,
-                     reg_outputs: torch.Tensor,
-                     cl_outputs: torch.Tensor,
-                     batch: Dict[str, torch.Tensor]
-                     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Calculates total and individual losses for regression and classification outputs."""
-
-        reg_loss = self._reg_loss(reg_outputs,
-                                  batch['rating'].to(torch.float32))
-        cl_loss = self._cl_loss(cl_outputs,
-                                batch['rating'] - 1)
-
-        total_loss = (
-            self._training_cfg.reg_loss_weight * reg_loss +
-            self._training_cfg.cl_loss_weight * cl_loss
-        )
-
-        return total_loss, reg_loss, cl_loss
 
     @torch.no_grad()
     def _fine_to_coarse(self,

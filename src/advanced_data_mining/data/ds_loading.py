@@ -196,6 +196,7 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
             num_features = json.load(f)
 
             data['rating'] = torch.tensor(num_features['rating'])
+            data['is_translated'] = torch.tensor(num_features['is_translated'], dtype=torch.bool)
             cat_features = num_features['encoded_cat_options']
 
         for cat_feature_name in supported_cat_features:
