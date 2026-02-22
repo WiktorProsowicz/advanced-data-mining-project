@@ -93,6 +93,62 @@ class RatingPredictor(pl.LightningModule):
             weight=torch.tensor(training_cfg.classification_classes_weights)
         )
 
+        self._train_cl_metrics = torchmetrics.MetricCollection(
+            {
+                'accuracy': torchmetrics.Accuracy('multiclass', num_classes=5),
+                'f1_m': torchmetrics.F1Score('multiclass', num_classes=5, average='macro'),
+                'f1_w': torchmetrics.F1Score('multiclass', num_classes=5, average='weighted'),
+                'prec_m': torchmetrics.Precision('multiclass', num_classes=5, average='macro'),
+                'prec_w': torchmetrics.Precision('multiclass', num_classes=5, average='weighted'),
+                'rec_m': torchmetrics.Recall('multiclass', num_classes=5, average='macro'),
+                'rec_w': torchmetrics.Recall('multiclass', num_classes=5, average='weighted')
+            },
+            prefix='train/rating_cl/'
+        )
+
+        self._train_reg_metrics = torchmetrics.MetricCollection(
+            {
+                'mae': torchmetrics.MeanAbsoluteError()
+            },
+            prefix='train/rating_reg/'
+        )
+
+        self._train_trans_cl_metrics = torchmetrics.MetricCollection(
+            {
+                'accuracy': torchmetrics.Accuracy(task='binary'),
+                'f1': torchmetrics.F1Score(task='binary', average='macro'),
+                'precision': torchmetrics.Precision(task='binary', average='macro'),
+                'recall': torchmetrics.Recall(task='binary', average='macro'),
+                'auroc': torchmetrics.AUROC(task='binary')
+            },
+            prefix='train/translation_cl/'
+        )
+
+        self._val_cl_metrics = self._train_cl_metrics.clone(prefix='val/rating_cl/')
+        self._val_reg_metrics = self._train_reg_metrics.clone(prefix='val/rating_reg/')
+        self._val_trans_cl_metrics = self._train_trans_cl_metrics.clone(
+            prefix='val/translation_cl/')
+
+        self._val_cl_metrics_classwise = torchmetrics.MetricCollection(
+            {
+                'f1': torchmetrics.F1Score('multiclass', num_classes=5, average='none'),
+                'precision': torchmetrics.Precision('multiclass', num_classes=5, average='none'),
+                'recall': torchmetrics.Recall('multiclass', num_classes=5, average='none')
+
+            },
+            prefix='val/rating_cl/'
+        )
+
+        self._val_cl_metrics_coarse = torchmetrics.MetricCollection(
+            {
+                'accuracy': torchmetrics.Accuracy('multiclass', num_classes=3),
+                'f1': torchmetrics.F1Score('multiclass', num_classes=3, average='macro'),
+                'prec': torchmetrics.Precision('multiclass', num_classes=3, average='macro'),
+                'rec': torchmetrics.Recall('multiclass', num_classes=3, average='macro'),
+            },
+            prefix='val/rating_cl_coarse/'
+        )
+
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(self.parameters(),
                                 lr=self._optimizer_cfg.lr,
@@ -140,35 +196,66 @@ class RatingPredictor(pl.LightningModule):
                       batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Performs training step."""
 
-        regression_pred, classification_pred = self(batch)
+        classification_preds, translation_cl_preds, reg_preds = self(batch)
+        losses = self._calculate_losses(
+            classification_preds,
+            translation_cl_preds,
+            reg_preds,
+            batch)
 
-        total_loss, reg_loss, cl_loss = self._calc_losses(
-            regression_pred, classification_pred, batch
-        )
+        self.log_dict({f'train/{name}': loss for name, loss in losses.items()}, on_step=True)
 
-        self.log('train/reg_loss', reg_loss, on_step=True, prog_bar=True)
-        self.log('train/cl_loss', cl_loss, on_step=True, prog_bar=True)
+        self._train_cl_metrics(classification_preds, batch['rating'] - 1)
+        self.log_dict(self._train_cl_metrics, on_step=True)
 
-        return total_loss
+        if self._training_cfg.reg_loss_weight is not None:
+            self._train_reg_metrics(reg_preds, batch['rating'].float())
+            self.log_dict(self._train_reg_metrics, on_step=True)
 
-    def on_train_epoch_end(self) -> None:
-        pass
+        if self._training_cfg.translation_cl_loss_weight is not None:
+            self._train_trans_cl_metrics(translation_cl_preds, batch['is_translated'])
+            self.log_dict(self._train_trans_cl_metrics, on_step=True)
+
+        return losses['total_loss']
 
     def validation_step(self,  # pylint: disable=arguments-differ
                         batch: Dict[str, torch.Tensor]) -> None:
         """Performs validation step."""
 
-        regression_pred, classification_pred = self(batch)
+        classification_preds, translation_cl_preds, reg_preds = self(batch)
+        losses = self._calculate_losses(
+            classification_preds,
+            translation_cl_preds,
+            reg_preds,
+            batch)
 
-        _, reg_loss, cl_loss = self._calc_losses(
-            regression_pred, classification_pred, batch
-        )
+        self.log_dict({f'val/{name}': loss for name, loss in losses.items()}, on_epoch=True)
 
-        self.log('val/reg_loss', reg_loss, on_epoch=True, prog_bar=True)
-        self.log('val/cl_loss', cl_loss, on_epoch=True, prog_bar=True)
+        self._val_cl_metrics(classification_preds, batch['rating'] - 1)
+        self.log_dict(self._val_cl_metrics, on_epoch=True)
+
+        self._val_cl_metrics_classwise.update(classification_preds, batch['rating'] - 1)
+
+        coarse_preds, coarse_labels = self._fine_to_coarse(classification_preds,
+                                                           batch['rating'] - 1)
+        self._val_cl_metrics_coarse(coarse_preds, coarse_labels)
+        self.log_dict(self._val_cl_metrics_coarse, on_epoch=True)
+
+        if self._training_cfg.reg_loss_weight is not None:
+            self._val_reg_metrics(reg_preds, batch['rating'].float())
+            self.log_dict(self._val_reg_metrics, on_epoch=True)
+
+        if self._training_cfg.translation_cl_loss_weight is not None:
+            self._val_trans_cl_metrics(translation_cl_preds, batch['is_translated'])
+            self.log_dict(self._val_trans_cl_metrics, on_epoch=True)
 
     def on_validation_epoch_end(self) -> None:
 
+        for metric_name, values in self._val_cl_metrics_classwise.compute().items():
+            for cl, value in enumerate(values, 1):
+                self.log(f'{metric_name}/class_{cl}', value)
+
+        self._val_cl_metrics_classwise.reset()
 
     def _calculate_losses(self,
                           cl_preds: torch.Tensor,
