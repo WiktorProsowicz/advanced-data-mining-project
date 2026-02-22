@@ -64,6 +64,26 @@ def main(cfg: omegaconf.DictConfig) -> None:
         _logger().info('Running training with configuration:\n%s',
                        omegaconf.OmegaConf.to_yaml(cfg))
 
+        callbacks = [
+            pl_callbacks.EarlyStopping(
+                monitor='train/rating_cl_cross_entropy', min_delta=0.0,
+                patience=cfg.run_cfg.early_stopping_patience,
+                mode='min',
+                verbose=True),
+            pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.run_cfg.swa_lr,
+                                                   swa_epoch_start=cfg.run_cfg.swa_start,
+                                                   annealing_epochs=cfg.run_cfg.swa_anneal)
+        ]
+
+        if cfg.run_cfg.save_checkpoints:
+            callbacks.append(pl_callbacks.ModelCheckpoint(
+                dirpath=os.path.join(mlflow.get_artifact_uri(), 'checkpoints'),
+                monitor='val/rating_cl_cross_entropy',
+                mode='min',
+                save_top_k=1,
+                every_n_epochs=1)
+            )
+
         trainer = pl.Trainer(
             accelerator='auto',
             devices='auto',
@@ -80,25 +100,12 @@ def main(cfg: omegaconf.DictConfig) -> None:
                     default_hp_metric=False
                 )
             ],
-            callbacks=[
-                pl_callbacks.ModelCheckpoint(
-                    dirpath=os.path.join(mlflow.get_artifact_uri(), 'checkpoints'),
-                    monitor='val/cl_loss',
-                    mode='min',
-                    save_top_k=1,
-                    every_n_epochs=1),
-                pl_callbacks.EarlyStopping(
-                    monitor='val/cl_loss', min_delta=0.0,
-                    patience=cfg.run_cfg.early_stopping_patience,
-                    mode='min'),
-                pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.run_cfg.swa_lr,
-                                                       swa_epoch_start=cfg.run_cfg.swa_start,
-                                                       annealing_epochs=cfg.run_cfg.swa_anneal)
-            ],
+            callbacks=callbacks,
             num_sanity_val_steps=0,
             enable_checkpointing=True,
             check_val_every_n_epoch=1,
-            log_every_n_steps=25
+            log_every_n_steps=500,
+            gradient_clip_val=cfg.run_cfg.gradient_clip_val
         )
 
         _logger().info('Starting training process.')
