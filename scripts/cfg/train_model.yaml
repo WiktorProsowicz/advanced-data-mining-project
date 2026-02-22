@@ -4,16 +4,18 @@ run_cfg:
   mlflow_experiment: sample_experiment
   mlflow_run: sample_run
   seed: 2137
-  max_epochs: 30
-  swa_start: 25
-  swa_anneal: 3
+  max_epochs: 10
+  swa_start: 10
+  swa_anneal: 2
   swa_lr: 0.0001
   early_stopping_patience: 3
   ds_path: data/processed_reviews_poland
   ds_metadata_path: data/processing_metadata_poland
   batch_size: 32
-  n_workers: 27
-  train_val_split: 0.95
+  n_workers: 8
+  train_val_split: 0.9
+  gradient_clip_val: 1.0
+  save_checkpoints: true
 
 data_loader_cfg:
   use_bert_embeddings: sentence
@@ -34,7 +36,7 @@ train_cfg:
   translation_cl_loss_weight: null
 
 optimizer_cfg:
-  lr: 0.001
+  lr: 0.0005
   weight_decay: 0.0001
 
 model_cfg:
