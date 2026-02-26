@@ -58,7 +58,7 @@ class RatingPredictor(pl.LightningModule):
 
         super().__init__()
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(logger=False)
 
         self._encoders: torch.nn.ModuleDict = torch.nn.ModuleDict({})
 
