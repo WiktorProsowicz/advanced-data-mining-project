@@ -64,7 +64,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         callbacks = [
             pl_callbacks.EarlyStopping(
-                monitor='train/rating_cl_cross_entropy', min_delta=0.0,
+                monitor='val/rating_cl_cross_entropy', min_delta=0.0,
                 patience=cfg.run_cfg.early_stopping_patience,
                 mode='min',
                 verbose=True),
