@@ -39,10 +39,11 @@ class ExperimentSummarizerConfig(BaseModel):
 class ExperimentSummarizer:
     """Summarizes MLflow experiments with metrics, plots, and figures."""
 
-    def __init__(self, config: ExperimentSummarizerConfig):
+    def __init__(self, config: ExperimentSummarizerConfig,
+                 mlflow_client: mlflow.tracking.MlflowClient):
         """Initializes the summarizer from configuration."""
         self._config = config
-        self._mlflow_client = mlflow.tracking.MlflowClient()
+        self._mlflow_client = mlflow_client
         sns.set_theme(style='darkgrid')
 
     def summarize(self, output_path: Path) -> None:
@@ -69,7 +70,7 @@ class ExperimentSummarizer:
         for metric_cfg in self._config.take_metrics:
             _logger().info('Summarizing metric: %s', metric_cfg.name)
 
-            metric_dir = output_path / metric_cfg.name
+            metric_dir = output_path / metric_cfg.name.replace('/', '-')
             metric_dir.mkdir(parents=True, exist_ok=True)
 
             if metric_cfg.name not in df.columns:
@@ -230,7 +231,8 @@ class ExperimentSummarizer:
             ax.tick_params(axis='x', rotation=45)
 
             fig.tight_layout()
-            output_file = output_dir / f'distribution_by_{param}.png'
+            param_name = param.replace('/', '-')
+            output_file = output_dir / f'distribution_by_{param_name}.png'
             fig.savefig(output_file, dpi=150)
             plt.close(fig)
             _logger().info('Saved distribution plot to %s', output_file)

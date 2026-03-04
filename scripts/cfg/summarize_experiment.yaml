@@ -1,60 +1,17 @@
 ---
-experiment_name: choosing_bow_encoder
-metrics_for_plot_axes:
-  - [cl_precision_coarse, cl_recall_coarse]
-  - [cl_precision_fine, cl_recall_fine]
-  - [cl_accuracy_weighted_fine, regression_mae]
-  - [cl_f1_score_coarse, classification_cross_entropy]
-  - [regression_mae, classification_cross_entropy]
-summary_tables:
-  - name: full
-    metrics:
-      - cl_accuracy_macro_coarse
-      - cl_accuracy_macro_fine
-      - cl_accuracy_weighted_coarse
-      - cl_accuracy_weighted_fine
-      - cl_f1_score_coarse
-      - cl_f1_score_fine
-      - cl_precision_coarse
-      - cl_precision_fine
-      - cl_recall_coarse
-      - cl_recall_fine
-      - classification_cross_entropy
-      - regression_mae
-      - regression_mse
-    sort_by: cl_accuracy_weighted_fine
-  - name: fine
-    metrics:
-      - cl_accuracy_weighted_fine
-      - cl_accuracy_macro_fine
-      - cl_f1_score_fine
-      - cl_precision_fine
-      - cl_recall_fine
-    sort_by: cl_accuracy_weighted_fine
-  - name: coarse
-    metrics:
-      - cl_accuracy_weighted_coarse
-      - cl_accuracy_macro_coarse
-      - cl_f1_score_coarse
-      - cl_precision_coarse
-      - cl_recall_coarse
-    sort_by: cl_accuracy_weighted_coarse
-  - name: losses
-    metrics:
-      - classification_cross_entropy
-      - regression_mae
-      - regression_mse
-    sort_by: classification_cross_entropy
+mlflow_server_uri: http://localhost:5000
+output_dir: tmp/experiment_summaries
 
-output_path: tmp/exp_summary_choosing_bow_encoder
-
-data_cfg:
-  n_test_samples: 1000
-  processed_ds_path: tmp/processed_ds_v0.2
-  train_val_split: 0.8
-  seed: 2137
-
-examples_cfg:
-  choose_by_metrics:
-    - cl_accuracy_macro_fine
-    - cl_accuracy_weighted_fine
+experiment_summarizers:
+  - experiment_name: word_count_feature_types
+    draw_n_best_curves: 3
+    draw_n_worst_curves: 3
+    take_metrics:
+      - name: val/rating_cl_cross_entropy
+        mode: min
+      - name: val/rating_cl/accuracy
+        mode: max
+      - name: val/rating_cl_coarse/prec
+        mode: max
+      - name: val/rating_cl_coarse/rec
+        mode: max
