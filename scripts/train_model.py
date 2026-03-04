@@ -40,10 +40,10 @@ def main(cfg: omegaconf.DictConfig) -> None:
         rating_predictor.OptimizerConfiguration.model_validate(optimizer_cfg)
     )
 
+    ds_cfg = omegaconf.OmegaConf.to_container(cfg.data_loader_cfg)
+
     data_module = ds_loading.ProcessedDataModule(
-        ds_cfg=ds_loading.ProcessedDatasetConfig.model_validate(
-            omegaconf.OmegaConf.to_container(cfg.data_loader_cfg)
-        ),
+        ds_cfg=ds_loading.ProcessedDatasetConfig.model_validate(ds_cfg),
         ds_path=pathlib.Path(cfg.run_cfg.ds_path),
         metadata_path=pathlib.Path(cfg.run_cfg.ds_metadata_path),
         batch_size=cfg.run_cfg.batch_size,
@@ -83,6 +83,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
             'model_cfg': model_cfg,
             'train_cfg': train_cfg,
             'optimizer_cfg': optimizer_cfg,
+            'ds_cfg': ds_cfg
         })
 
         if cfg.run_cfg.save_checkpoints:
