@@ -2,11 +2,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict
-from typing import List
 from typing import Literal
-from typing import Optional
-from typing import Tuple
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -15,7 +11,7 @@ import pandas as pd
 import seaborn as sns
 from pydantic import BaseModel
 
-from advanced_data_mining.utils import misc as misc_utils
+from advanced_data_mining.data.eda import utils as eda_utils
 
 
 def _logger() -> logging.Logger:
@@ -33,7 +29,7 @@ class ExperimentSummarizerConfig(BaseModel):
     experiment_name: str
     draw_n_best_curves: int
     draw_n_worst_curves: int
-    take_metrics: List[MetricConfig]
+    take_metrics: list[MetricConfig]
 
 
 class ExperimentSummarizer:
@@ -113,9 +109,7 @@ class ExperimentSummarizer:
                    'run_id': run.info.run_id}
 
             row.update(run.data.metrics)
-
-            params = dict(run.data.params)
-            row.update(params)
+            row.update(dict(run.data.params))
 
             data.append(row)
 
@@ -126,7 +120,6 @@ class ExperimentSummarizer:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False)
-        _logger().info('Saved summary table to %s', output_path)
 
     def _save_dataframe_summary(self, df: pd.DataFrame, output_path: Path) -> None:
         """Saves dataframe summary statistics."""
@@ -135,8 +128,6 @@ class ExperimentSummarizer:
 
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(df.describe(include='all').to_dict(), f, indent=4, ensure_ascii=False)
-
-        _logger().info('Saved dataframe summary to %s', output_path)
 
     def _plot_learning_curves(self,
                               df: pd.DataFrame,
@@ -177,11 +168,10 @@ class ExperimentSummarizer:
         fig.tight_layout()
         fig.savefig(output_path, dpi=150)
         plt.close(fig)
-        _logger().info('Saved learning curves to %s', output_path)
 
     def _extract_metric_history(
         self, run_id: str, metric_name: str
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Extracts metric history arrays from a run."""
         metric_history = self._mlflow_client.get_metric_history(run_id, metric_name)
 
@@ -219,6 +209,9 @@ class ExperimentSummarizer:
                 x=param,
                 y=metric_name,
                 hue=param,
+                inner='quart',
+                inner_kws={'linewidth': 2},
+                palette=eda_utils.get_gradient_palette_reversed(df[param].nunique()),
                 legend=False,
                 ax=ax
             )
@@ -231,8 +224,6 @@ class ExperimentSummarizer:
             ax.tick_params(axis='x', rotation=45)
 
             fig.tight_layout()
-            param_name = param.replace('/', '-')
-            output_file = output_dir / f'distribution_by_{param_name}.png'
+            output_file = output_dir / f'distribution_by_{param.replace("/", "-")}.png'
             fig.savefig(output_file, dpi=150)
             plt.close(fig)
-            _logger().info('Saved distribution plot to %s', output_file)
