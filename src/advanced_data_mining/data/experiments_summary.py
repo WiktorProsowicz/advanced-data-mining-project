@@ -1,17 +1,19 @@
 """Contains utilities for summarizing MLflow experiments."""
-import ast
-import collections
+import json
 import logging
-import os
-import sys
-from typing import Any
+from pathlib import Path
 from typing import Dict
 from typing import List
+from typing import Literal
+from typing import Optional
 from typing import Tuple
 
-import matplotlib.figure as mlp_figure
 import matplotlib.pyplot as plt
+import mlflow
 import numpy as np
+import pandas as pd
+import seaborn as sns
+from pydantic import BaseModel
 
 from advanced_data_mining.utils import misc as misc_utils
 
@@ -20,281 +22,215 @@ def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-def extract_test_metrics(mlflow_run: misc_utils.MLRun) -> Dict[str, float]:
-    """Extracts test metrics from an MLflow run."""
+class MetricConfig(BaseModel):
+    """Configuration for a metric to summarize."""
+    name: str
+    mode: Literal["min", "max"]
 
-    metrics = {}
 
-    metrics_path = os.path.join(mlflow_run.path, 'metrics', 'test')
+class ExperimentSummarizerConfig(BaseModel):
+    """Configuration for ExperimentSummarizer."""
+    experiment_name: str
+    draw_n_best_curves: int
+    draw_n_worst_curves: int
+    take_metrics: List[MetricConfig]
 
-    for metric_file in os.listdir(metrics_path):
-        with open(os.path.join(metrics_path, metric_file), encoding='utf-8') as f:
-            _, value, _ = f.readline().strip().split(' ')
 
-        metrics[metric_file] = float(value)
+class ExperimentSummarizer:
+    """Summarizes MLflow experiments with metrics, plots, and figures."""
 
-    return metrics
+    def __init__(self, config: ExperimentSummarizerConfig):
+        """Initializes the summarizer from configuration."""
+        self._config = config
+        self._mlflow_client = mlflow.tracking.MlflowClient()
+        sns.set_theme(style='darkgrid')
 
+    def summarize(self, output_path: Path) -> None:
+        """Produces experiment summaries for each configured metric.
 
-def plot_metric_pair(mlflow_runs: list[misc_utils.MLRun],
-                     x_metric: str,
-                     y_metric: str) -> mlp_figure.Figure:
-    """Creates a scatter plot for two given metrics across multiple MLflow runs."""
+        The method prepares output directories, ranks runs for each metric,
+        saves tabular summaries, and generates plots that highlight both
+        learning behavior and distribution patterns across parameter values.
 
-    fig, ax = plt.subplots(figsize=(12, 12))
+        Args:
+            output_path: Directory where summary artifacts are written.
+        """
+        _logger().info('Starting experiment summarization for experiment: %s',
+                       self._config.experiment_name)
 
-    runs_metrics = {
-        run: extract_test_metrics(run) for run in mlflow_runs
-    }
+        output_path = Path(output_path)
+        output_path.mkdir(parents=True, exist_ok=True)
 
-    if not all(x_metric in metrics and y_metric in metrics
-               for metrics in runs_metrics.values()):
-        _logger().critical('Not all runs contain the specified metrics: %s, %s', x_metric, y_metric)
-        sys.exit(1)
+        df = self._create_summary_dataframe()
+        if df.empty:
+            _logger().warning('No runs found')
+            return
 
-    x_values = [metrics[x_metric] for metrics in runs_metrics.values()]
-    y_values = [metrics[y_metric] for metrics in runs_metrics.values()]
+        for metric_cfg in self._config.take_metrics:
+            _logger().info('Summarizing metric: %s', metric_cfg.name)
 
-    ax.scatter(x_values, y_values)
+            metric_dir = output_path / metric_cfg.name
+            metric_dir.mkdir(parents=True, exist_ok=True)
 
-    best_x = min(runs_metrics.items(), key=lambda item: item[1][x_metric])
-    best_y = max(runs_metrics.items(), key=lambda item: item[1][y_metric])
-    worst_x = max(runs_metrics.items(), key=lambda item: item[1][x_metric])
-    worst_y = min(runs_metrics.items(), key=lambda item: item[1][y_metric])
+            if metric_cfg.name not in df.columns:
+                _logger().warning('Metric %s not found in runs', metric_cfg.name)
+                continue
 
-    ax.scatter(best_x[1][x_metric], best_x[1][y_metric], color='green', label=best_x[0].run_name)
-    ax.scatter(best_y[1][x_metric], best_y[1][y_metric], color='blue', label=best_y[0].run_name)
-    ax.scatter(worst_x[1][x_metric], worst_x[1][y_metric], color='red', label=worst_x[0].run_name)
-    ax.scatter(worst_y[1][x_metric], worst_y[1][y_metric],
-               color='orange', label=worst_y[0].run_name)
+            sorted_df = df.sort_values(by=metric_cfg.name, ascending=metric_cfg.mode == "min")
 
-    ax.set_xlabel(x_metric)
-    ax.set_ylabel(y_metric)
-    ax.set_title(f'Scatter Plot of {y_metric} vs {x_metric}')
-    ax.legend()
+            self._save_summary_table(sorted_df, metric_dir / 'summary_table.csv')
 
-    plt.close(fig)
+            self._save_dataframe_summary(sorted_df, metric_dir / 'summary_stats.json')
 
-    return fig
+            self._plot_learning_curves(
+                sorted_df, metric_cfg.name,
+                self._config.draw_n_best_curves, metric_dir / 'best_curves.png', best=True
+            )
 
+            self._plot_learning_curves(
+                sorted_df, metric_cfg.name,
+                self._config.draw_n_worst_curves, metric_dir / 'worst_curves.png', best=False
+            )
 
-def extract_basic_info(mlflow_run: misc_utils.MLRun) -> Dict[str, Any]:
-    """Extracts basic information from an MLflow run."""
+            self._plot_metric_distributions(sorted_df, metric_cfg.name, metric_dir)
 
-    info: Dict[str, Any] = {}
+    def _create_summary_dataframe(self) -> pd.DataFrame:
+        """Builds a summary dataframe for all runs."""
+        data = []
+        experiment = self._mlflow_client.get_experiment_by_name(
+            self._config.experiment_name
+        )
 
-    cpt_metric_path = os.path.join(mlflow_run.path, 'metrics', 'val', 'cl_accuracy_weighted_fine')
-    with open(cpt_metric_path, encoding='utf-8') as f:
-        accuracies = [float(value) for _, value, _ in
-                      (line.strip().split(' ') for line in f.readlines())]
+        if not experiment:
+            _logger().warning('Experiment not found: %s', self._config.experiment_name)
+            return pd.DataFrame()
 
-        best_epoch = np.argmax(accuracies)
+        runs = self._mlflow_client.search_runs(experiment.experiment_id)
 
-    info['best_epoch'] = int(best_epoch)
-    info['n_epochs'] = len(accuracies)
-    info['best_val_cl_accuracy'] = float(accuracies[best_epoch])
+        for run in runs:
+            row = {'run_name': run.data.tags.get('mlflow.runName', run.info.run_id),
+                   'run_id': run.info.run_id}
 
-    info['bow_encoders_used'] = os.listdir(os.path.join(mlflow_run.path,
-                                                        'params', 'model_cfg', 'bow_encoders'))
+            row.update(run.data.metrics)
 
-    opt_cfg_path = os.path.join(mlflow_run.path, 'params', 'optimizer_cfg', 'lr')
-    with open(opt_cfg_path, encoding='utf-8') as f:
-        info['learning_rate'] = float(f.readline().strip())
+            params = dict(run.data.params)
+            row.update(params)
 
-    model_cfg_path = os.path.join(mlflow_run.path, 'params', 'model_cfg')
-    with open(os.path.join(model_cfg_path, 'post_net', 'hidden_dims'), encoding='utf-8') as f:
-        hidden_dims = ast.literal_eval(f.readline().strip())
-        info['post_net_hidden_dims'] = hidden_dims
+            data.append(row)
 
-    num_enc_path = os.path.join(model_cfg_path, 'numerical_feature_encoder')
+        return pd.DataFrame(data)
 
-    if os.path.isdir(num_enc_path):
-        with open(os.path.join(num_enc_path, 'supported_features'), encoding='utf-8') as f:
-            supported_features = ast.literal_eval(f.readline().strip())
-            info['numerical_features_used'] = supported_features
-
-    else:
-        info['numerical_features_used'] = []
-
-    return info
-
-
-def get_best_checkpoint_path(run: misc_utils.MLRun) -> str:
-    """Returns path to checkpoint corresponding with the best metric."""
-
-    basic_info = extract_basic_info(run)
-
-    for epoch_file in os.listdir(os.path.join(run.path, 'checkpoints')):
-
-        if epoch_file.startswith(f'epoch={basic_info["best_epoch"]}-'):
-            return os.path.join(run.path, 'checkpoints', epoch_file)
-
-    _logger().critical('Failed to obtain best checkpoint path!')
-    sys.exit(1)
-
-
-def compose_summary_table(mlflow_runs: list[misc_utils.MLRun],
-                          metrics: list[str],
-                          sort_by: str) -> str:
-    """Composes a summary table of specified metrics across multiple MLflow runs."""
-
-    basic_info_labels = ['best_epoch', 'n_epochs', 'best_val_cl_accuracy',
-                         'bow_encoders_used', 'numerical_features_used', 'learning_rate']
-
-    header = '| Run name | ' + ' | '.join(basic_info_labels + metrics) + ' |\n'
-    separator = '| --- ' + '| --- ' * (len(basic_info_labels) + len(metrics)) + ' |\n'
-    rows = ''
-
-    mlflow_runs = sorted(mlflow_runs,
-                         key=lambda run: extract_test_metrics(run)[sort_by],
-                         reverse=True)
-
-    for run in mlflow_runs:
-        run_metrics = extract_test_metrics(run)
-        basic_info = extract_basic_info(run)
-
-        row = f'| {run.run_name} | '
-        row += ' | '.join(str(basic_info[label]) for label in basic_info_labels) + ' | '
-        row += ' | '.join(f'{run_metrics.get(metric, "N/A"):.4f}' for metric in metrics) + ' |\n'
-
-        rows += row
-
-    table = header + separator + rows
-
-    return table
-
-
-def get_summary_figures(mlflow_runs: list[misc_utils.MLRun]) -> Dict[str, mlp_figure.Figure]:
-    """Generates summary figures for given MLflow runs."""
-
-    figures = {}
-
-    runs_metrics = {
-        run: extract_test_metrics(run) for run in mlflow_runs
-    }
-
-    figures.update(_get_metric_distributions_figures(runs_metrics))
-
-    return figures
-
-
-def get_best_and_worst_runs(mlflow_runs: list[misc_utils.MLRun],
-                            metric: str) -> Tuple[misc_utils.MLRun, misc_utils.MLRun]:
-    """Returns best and worst runs with respect to a given metric."""
-
-    runs_metrics = {run: extract_test_metrics(run) for run in mlflow_runs}
-
-    if not runs_metrics:
-        _logger().critical('Cannot get best and worst run from an empty sequence!')
-        sys.exit(1)
-
-    return (max(mlflow_runs, key=lambda run: runs_metrics[run][metric]),
-            min(mlflow_runs, key=lambda run: runs_metrics[run][metric]))
-
-
-def _get_metric_distributions_figures(
-        runs_metrics: Dict[misc_utils.MLRun, Dict[str, float]]) -> Dict[str, mlp_figure.Figure]:
-
-    figures: Dict[str, mlp_figure.Figure] = {}
-
-    encoders_groups = collections.defaultdict(list)
-    lr_groups = collections.defaultdict(list)
-    postnet_hidden_dims_groups = collections.defaultdict(list)
-    numerical_features_groups = collections.defaultdict(list)
-    trace_features_groups = collections.defaultdict(list)
-
-    for run in runs_metrics:
-
-        basic_info = extract_basic_info(run)
-
-        encoders = tuple(sorted(basic_info['bow_encoders_used']))
-        encoders_groups[encoders].append(run)
-
-        lr_groups[basic_info['learning_rate']].append(run)
-
-        post_net_hidden_dims = tuple(basic_info['post_net_hidden_dims'])
-        postnet_hidden_dims_groups[post_net_hidden_dims].append(run)
-
-        valid_num_features = ['num_words', 'num_sentences', 'is_from_cracow']
-
-        numerical_features = tuple(sorted({
-            feat for feat in basic_info['numerical_features_used']
-            if feat in valid_num_features
-        }))
-        numerical_features_groups[numerical_features].append(run)
-
-        trace_features = tuple(sorted({
-            feat for feat in basic_info['numerical_features_used']
-            if feat not in numerical_features
-        }))
-        trace_features_groups[trace_features].append(run)
-
-    figures.update(_get_metric_distributions_by_groups(
-        runs_metrics=runs_metrics,
-        groups={', '.join(k): v for k, v in encoders_groups.items()},
-        label='distributions_by_bow_encoders'
-    ))
-
-    figures.update(_get_metric_distributions_by_groups(
-        runs_metrics=runs_metrics,
-        groups={str(k): v for k, v in lr_groups.items()},
-        label='distributions_by_learning_rate'
-    ))
-
-    figures.update(_get_metric_distributions_by_groups(
-        runs_metrics=runs_metrics,
-        groups={str(k): v for k, v in postnet_hidden_dims_groups.items()},
-        label='distributions_by_postnet_hidden_dims'
-    ))
-
-    figures.update(_get_metric_distributions_by_groups(
-        runs_metrics=runs_metrics,
-        groups={', '.join(k): v for k, v in numerical_features_groups.items()},
-        label='distributions_by_numerical_features'
-    ))
-
-    figures.update(_get_metric_distributions_by_groups(
-        runs_metrics=runs_metrics,
-        groups={', '.join(k): v for k, v in trace_features_groups.items()},
-        label='distributions_by_trace_features'
-    ))
-
-    return figures
-
-
-def _get_metric_distributions_by_groups(
-        runs_metrics: Dict[misc_utils.MLRun, Dict[str, float]],
-        groups: Dict[str, List[misc_utils.MLRun]],
-        label: str
-) -> Dict[str, mlp_figure.Figure]:
-
-    metrics = ['cl_accuracy_weighted_fine', 'cl_accuracy_weighted_coarse',
-               'cl_accuracy_macro_fine', 'cl_accuracy_macro_coarse']
-
-    figures: Dict[str, mlp_figure.Figure] = {}
-
-    for metric in metrics:
-
-        fig, ax = plt.subplots()
-
-        ax.set_ylabel(metric)
-        ax.set_title(f'Distribution of {metric} by BOW Encoders Used')
-
-        values = {bow_group: [runs_metrics[run][metric] for run in runs]
-                  for bow_group, runs in groups.items()}
-
-        plot_parts = ax.violinplot(list(values.values()), showmeans=True,
-                                   showmedians=False, quantiles=[[.25, .75]] * len(groups))
-
-        plot_parts['cquantiles'].set_color('red')
-
-        ax.set_xticks(np.arange(1, len(values) + 1))
-        ax.set_xticklabels(list(values.keys()), rotation=45, ha='right')
-        ax.grid(axis='y')
+    def _save_summary_table(self, df: pd.DataFrame, output_path: Path) -> None:
+        """Saves the summary table to CSV."""
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(output_path, index=False)
+        _logger().info('Saved summary table to %s', output_path)
+
+    def _save_dataframe_summary(self, df: pd.DataFrame, output_path: Path) -> None:
+        """Saves dataframe summary statistics."""
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(df.describe(include='all').to_dict(), f, indent=4, ensure_ascii=False)
+
+        _logger().info('Saved dataframe summary to %s', output_path)
+
+    def _plot_learning_curves(self,
+                              df: pd.DataFrame,
+                              metric_name: str,
+                              n_curves: int,
+                              output_path: Path,
+                              best: bool = True) -> None:
+        """Plots learning curves for selected runs."""
+
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if best:
+            selected_df = df.head(n_curves)
+            title_prefix = "Best"
+        else:
+            selected_df = df.tail(n_curves)
+            title_prefix = "Worst"
+
+        if selected_df.empty:
+            _logger().warning('No runs selected for plotting')
+            return
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        for _, row in selected_df.iterrows():
+            epochs, values = self._extract_metric_history(row['run_id'], metric_name)
+            if epochs is not None and values is not None:
+                ax.plot(epochs, values, marker='o', label=row['run_name'], linewidth=2)
+
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel(metric_name)
+        ax.set_title(f'{title_prefix} {n_curves} Learning Curves - {metric_name}')
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_axisbelow(True)
 
         fig.tight_layout()
+        fig.savefig(output_path, dpi=150)
         plt.close(fig)
+        _logger().info('Saved learning curves to %s', output_path)
 
-        figures[f'{label}/{metric}'] = fig
+    def _extract_metric_history(
+        self, run_id: str, metric_name: str
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """Extracts metric history arrays from a run."""
+        metric_history = self._mlflow_client.get_metric_history(run_id, metric_name)
 
-    return figures
+        if not metric_history:
+            return None, None
+
+        steps = np.array([m.step for m in metric_history])
+        values = np.array([m.value for m in metric_history])
+
+        return steps, values
+
+    def _plot_metric_distributions(
+            self, df: pd.DataFrame, metric_name: str, output_dir: Path) -> None:
+        """Plots metric distributions grouped by parameter values."""
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        if metric_name in numeric_cols:
+            numeric_cols.remove(metric_name)
+
+        param_cols = [
+            col for col in df.columns if col not in numeric_cols and col not in [
+                'run_name', 'run_id', metric_name]]
+
+        for param in param_cols:
+            if df[param].nunique() > 20:
+                continue
+
+            fig, ax = plt.subplots(figsize=(12, 6))
+
+            sns.violinplot(
+                data=df,
+                x=param,
+                y=metric_name,
+                hue=param,
+                legend=False,
+                ax=ax
+            )
+
+            ax.set_xlabel(param)
+            ax.set_ylabel(metric_name)
+            ax.set_title(f'{metric_name} Distribution by {param}')
+            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_axisbelow(True)
+            ax.tick_params(axis='x', rotation=45)
+
+            fig.tight_layout()
+            output_file = output_dir / f'distribution_by_{param}.png'
+            fig.savefig(output_file, dpi=150)
+            plt.close(fig)
+            _logger().info('Saved distribution plot to %s', output_file)
