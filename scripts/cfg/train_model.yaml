@@ -16,6 +16,7 @@ run_cfg:
   train_val_split: 0.9
   gradient_clip_val: 1.0
   save_checkpoints: true
+  limit_train_batches: null
 
 data_loader_cfg:
   use_bert_embeddings: sentence
