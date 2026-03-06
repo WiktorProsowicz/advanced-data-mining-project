@@ -35,12 +35,7 @@ The recommended workflow of using the project assumes the following order of run
 
 ### Development
 
-While training the model, set up MLFlow and Tensorboard servers.
-
-```
-mlflow server --backend-store-uri sqlite:///mlflow_tracking.db --default-artifact-root ./mlflow_artifacts/ --host 0.0.0.0 --port 5000
-tensorboard --host 0.0.0.0 --port 5001 --logdir tensorboard/
-```
+In `Contribution.md`, there's a list of best practices a developer of this repository should follow. 
 
 ## Changelog
 
