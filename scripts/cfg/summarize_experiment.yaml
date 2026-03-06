@@ -15,3 +15,7 @@ experiment_summarizers:
         mode: max
       - name: val/rating_cl_coarse/rec
         mode: max
+      - name: val/rating_cl/prec_m
+        mode: max
+      - name: val/rating_cl/rec_m
+        mode: max

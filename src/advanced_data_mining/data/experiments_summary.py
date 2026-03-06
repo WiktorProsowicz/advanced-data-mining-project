@@ -161,9 +161,38 @@ class ExperimentSummarizer:
 
         fig, ax = plt.subplots(figsize=(12, 8))
 
-        for _, row in selected_df.iterrows():
-            epochs, values = self._extract_metric_history(row['run_id'], metric_name)
-            ax.plot(epochs, values, marker='o', label=row['run_name'], linewidth=2)
+        cmap = eda_utils.get_gradient_cmap()
+        sampled_colors = [
+            cmap(value) for value in np.linspace(0.15, 0.95, max(len(selected_df), 1))
+        ]
+
+        for idx, (_, row) in enumerate(selected_df.iterrows()):
+            val_steps, val_values = self._extract_metric_history(row['run_id'], metric_name)
+
+            ax.plot(
+                val_steps,
+                val_values,
+                linestyle='-',
+                marker='o',
+                label=row['run_name'],
+                linewidth=2,
+                color=sampled_colors[idx]
+            )
+
+            if metric_name.startswith('val/'):
+                train_steps, train_values = self._extract_metric_history(
+                    row['run_id'], metric_name.replace('val/', 'train/'))
+                train_steps, train_values = self._average_over_reference_windows(
+                    train_steps, train_values, val_steps)
+
+                ax.plot(
+                    train_steps,
+                    train_values,
+                    linestyle='--',
+                    linewidth=2,
+                    color=sampled_colors[idx],
+                    alpha=0.6
+                )
 
         ax.set_xlabel('Step')
         ax.set_ylabel(metric_name)
@@ -186,6 +215,30 @@ class ExperimentSummarizer:
         values = np.array([m.value for m in metric_history])
 
         return steps, values
+
+    def _average_over_reference_windows(self,
+                                        source_steps: np.ndarray,
+                                        source_values: np.ndarray,
+                                        reference_steps: np.ndarray
+                                        ) -> tuple[np.ndarray, np.ndarray]:
+        """Averages source metric values in windows defined by reference steps."""
+        if len(source_steps) == 0 or len(reference_steps) == 0:
+            return np.array([]), np.array([])
+
+        averaged_steps = []
+        averaged_values = []
+        previous_step = -np.inf
+
+        for step in reference_steps:
+            window = (source_steps > previous_step) & (source_steps <= step)
+
+            if np.any(window):
+                averaged_steps.append(step)
+                averaged_values.append(np.mean(source_values[window]))
+
+            previous_step = step
+
+        return np.array(averaged_steps), np.array(averaged_values)
 
     def _get_parameter_columns(self, df: pd.DataFrame) -> list[str]:
         """Identifies parameter columns based on common prefixes."""
