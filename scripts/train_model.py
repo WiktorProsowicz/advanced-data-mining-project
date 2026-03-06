@@ -64,9 +64,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         callbacks = [
             pl_callbacks.EarlyStopping(
-                monitor='val/rating_cl_cross_entropy', min_delta=0.0,
+                monitor='val/rating_cl/prec_m', min_delta=-0.005,
                 patience=cfg.run_cfg.early_stopping_patience,
-                mode='min',
+                mode='max',
                 verbose=True),
             pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.run_cfg.swa_lr,
                                                    swa_epoch_start=cfg.run_cfg.swa_start,
