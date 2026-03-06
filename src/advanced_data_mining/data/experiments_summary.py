@@ -75,7 +75,7 @@ class ExperimentSummarizer:
 
             sorted_df = df.sort_values(by=metric_cfg.name, ascending=metric_cfg.mode == "min")
 
-            self._save_summary_table(sorted_df, metric_dir / 'summary_table.csv')
+            self._save_summary_table(sorted_df, metric_dir / 'summary_table.md')
 
             self._save_dataframe_summary(sorted_df, metric_dir / 'summary_stats.json')
 
@@ -113,13 +113,21 @@ class ExperimentSummarizer:
 
             data.append(row)
 
-        return pd.DataFrame(data)
+        df = pd.DataFrame(data)
+
+        for column in self._get_parameter_columns(df):
+
+            numeric_values = pd.to_numeric(df[column], errors='coerce')
+            if numeric_values.notna().sum() == df[column].notna().sum():
+                df[column] = numeric_values
+
+        return df
 
     def _save_summary_table(self, df: pd.DataFrame, output_path: Path) -> None:
-        """Saves the summary table to CSV."""
+        """Saves the summary table to Markdown."""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(output_path, index=False)
+        output_path.write_text(df.to_markdown(index=False), encoding='utf-8')
 
     def _save_dataframe_summary(self, df: pd.DataFrame, output_path: Path) -> None:
         """Saves dataframe summary statistics."""
@@ -155,10 +163,9 @@ class ExperimentSummarizer:
 
         for _, row in selected_df.iterrows():
             epochs, values = self._extract_metric_history(row['run_id'], metric_name)
-            if epochs is not None and values is not None:
-                ax.plot(epochs, values, marker='o', label=row['run_name'], linewidth=2)
+            ax.plot(epochs, values, marker='o', label=row['run_name'], linewidth=2)
 
-        ax.set_xlabel('Epoch')
+        ax.set_xlabel('Step')
         ax.set_ylabel(metric_name)
         ax.set_title(f'{title_prefix} {n_curves} Learning Curves - {metric_name}')
         ax.legend()
@@ -169,19 +176,23 @@ class ExperimentSummarizer:
         fig.savefig(output_path, dpi=150)
         plt.close(fig)
 
-    def _extract_metric_history(
-        self, run_id: str, metric_name: str
-    ) -> tuple[np.ndarray | None, np.ndarray | None]:
+    def _extract_metric_history(self,
+                                run_id: str,
+                                metric_name: str) -> tuple[np.ndarray, np.ndarray]:
         """Extracts metric history arrays from a run."""
         metric_history = self._mlflow_client.get_metric_history(run_id, metric_name)
-
-        if not metric_history:
-            return None, None
 
         steps = np.array([m.step for m in metric_history])
         values = np.array([m.value for m in metric_history])
 
         return steps, values
+
+    def _get_parameter_columns(self, df: pd.DataFrame) -> list[str]:
+        """Identifies parameter columns based on common prefixes."""
+        param_col_prefixes = ('model_cfg', 'data_cfg', 'train_cfg', 'ds_cfg')
+        return [col
+                for col in df.columns
+                if any(col.startswith(prefix) for prefix in param_col_prefixes)]
 
     def _plot_metric_distributions(
             self, df: pd.DataFrame, metric_name: str, output_dir: Path) -> None:
@@ -189,18 +200,7 @@ class ExperimentSummarizer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-        if metric_name in numeric_cols:
-            numeric_cols.remove(metric_name)
-
-        param_cols = [
-            col for col in df.columns if col not in numeric_cols and col not in [
-                'run_name', 'run_id', metric_name]]
-
-        for param in param_cols:
-            if df[param].nunique() > 20:
-                continue
+        for param in self._get_parameter_columns(df):
 
             fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -210,16 +210,15 @@ class ExperimentSummarizer:
                 y=metric_name,
                 hue=param,
                 inner='quart',
-                inner_kws={'linewidth': 2},
                 palette=eda_utils.get_gradient_palette_reversed(df[param].nunique()),
                 legend=False,
                 ax=ax
             )
 
-            ax.set_xlabel(param)
+            ax.set_xlabel(param.rsplit('/', maxsplit=1)[-1] or param)
             ax.set_ylabel(metric_name)
-            ax.set_title(f'{metric_name} Distribution by {param}')
-            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_title(f'Distribution of "{metric_name}" by "{param}"')
+            ax.xaxis.grid(True, 'minor', linewidth=0.25)
             ax.set_axisbelow(True)
             ax.tick_params(axis='x', rotation=45)
 

@@ -1,6 +1,6 @@
 ---
 mlflow_server_uri: http://localhost:5000
-output_dir: tmp/experiment_summaries
+output_dir: tmp/experiment_summaries/word_count_feature_types
 
 experiment_summarizers:
   - experiment_name: word_count_feature_types
