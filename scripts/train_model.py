@@ -62,16 +62,20 @@ def main(cfg: omegaconf.DictConfig) -> None:
         _logger().info('Running training with configuration:\n%s',
                        omegaconf.OmegaConf.to_yaml(cfg))
 
-        callbacks = [
+        callbacks: list[pl_callbacks.Callback] = [
             pl_callbacks.EarlyStopping(
                 monitor='val/rating_cl/prec_m', min_delta=-0.005,
                 patience=cfg.run_cfg.early_stopping_patience,
                 mode='max',
-                verbose=True),
-            pl_callbacks.StochasticWeightAveraging(swa_lrs=cfg.run_cfg.swa_lr,
-                                                   swa_epoch_start=cfg.run_cfg.swa_start,
-                                                   annealing_epochs=cfg.run_cfg.swa_anneal)
+                verbose=True)
         ]
+
+        if cfg.run_cfg.swa is not None:
+            callbacks.append(pl_callbacks.StochasticWeightAveraging(
+                swa_epoch_start=cfg.run_cfg.swa.start,
+                swa_lrs=cfg.run_cfg.swa.lr,
+                annealing_epochs=cfg.run_cfg.swa.anneal
+            ))
 
         mlflow_logger = pl_loggers.MLFlowLogger(
             experiment_name=cfg.run_cfg.mlflow_experiment,
