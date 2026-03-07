@@ -9,6 +9,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.axes import Axes
 from pydantic import BaseModel
 
 from advanced_data_mining.data.eda import utils as eda_utils
@@ -63,6 +64,9 @@ class ExperimentSummarizer:
             _logger().warning('No runs found')
             return
 
+        self._save_summary_table(df, output_path / 'summary_table.csv')
+        self._save_dataframe_summary(df, output_path / 'summary_stats.json')
+
         for metric_cfg in self._config.take_metrics:
             _logger().info('Summarizing metric: %s', metric_cfg.name)
 
@@ -75,24 +79,18 @@ class ExperimentSummarizer:
 
             sorted_df = df.sort_values(by=metric_cfg.name, ascending=metric_cfg.mode == "min")
 
-            self._save_summary_table(sorted_df, metric_dir / 'summary_table.md')
-
-            self._save_dataframe_summary(sorted_df, metric_dir / 'summary_stats.json')
-
-            self._plot_learning_curves(
-                sorted_df, metric_cfg.name,
-                self._config.draw_n_best_curves, metric_dir / 'best_curves.png', best=True
-            )
-
-            self._plot_learning_curves(
-                sorted_df, metric_cfg.name,
-                self._config.draw_n_worst_curves, metric_dir / 'worst_curves.png', best=False
+            self._plot_best_and_worst_curves(
+                sorted_df=sorted_df,
+                metric_name=metric_cfg.name,
+                output_path=metric_dir / 'best_worst_curves.svg',
+                n_curves=self._config.draw_n_best_curves,
+                title_suffix=metric_cfg.name
             )
 
             self._plot_metric_distributions(
                 sorted_df,
                 metric_cfg.name,
-                metric_dir / 'distribution_wrt_params'
+                metric_dir
             )
 
     def _create_summary_dataframe(self) -> pd.DataFrame:
@@ -128,10 +126,10 @@ class ExperimentSummarizer:
         return df
 
     def _save_summary_table(self, df: pd.DataFrame, output_path: Path) -> None:
-        """Saves the summary table to Markdown."""
+        """Saves the summary table to CSV."""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(df.to_markdown(index=False), encoding='utf-8')
+        df.to_csv(output_path, index=False)
 
     def _save_dataframe_summary(self, df: pd.DataFrame, output_path: Path) -> None:
         """Saves dataframe summary statistics."""
@@ -141,73 +139,100 @@ class ExperimentSummarizer:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(df.describe(include='all').to_dict(), f, indent=4, ensure_ascii=False)
 
-    def _plot_learning_curves(self,
-                              df: pd.DataFrame,
-                              metric_name: str,
-                              n_curves: int,
-                              output_path: Path,
-                              best: bool = True) -> None:
-        """Plots learning curves for selected runs."""
-
+    def _plot_best_and_worst_curves(
+            self,
+            sorted_df: pd.DataFrame,
+            metric_name: str,
+            output_path: Path,
+            n_curves: int,
+            title_suffix: str | None = None) -> None:
+        """Plots best and worst learning curves for a sorted metric dataframe."""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if best:
-            selected_df = df.head(n_curves)
-            title_prefix = "Best"
-        else:
-            selected_df = df.tail(n_curves)
-            title_prefix = "Worst"
-
-        if selected_df.empty:
+        best_df = sorted_df.head(n_curves)
+        worst_df = sorted_df.tail(n_curves)
+        if best_df.empty and worst_df.empty:
             _logger().warning('No runs selected for plotting')
             return
 
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, axes = plt.subplots(1, 2, figsize=(18, 7), sharey=True)
+
+        best_max_step = self._plot_learning_curves(best_df, metric_name, axes[0])
+        worst_max_step = self._plot_learning_curves(worst_df, metric_name, axes[1])
+
+        max_step = max(best_max_step, worst_max_step)
+        if max_step > 0:
+            axes[0].set_xlim(0, max_step)
+            axes[1].set_xlim(0, max_step)
+
+        axes[0].set_title(f'Best {n_curves}')
+        axes[1].set_title(f'Worst {n_curves}')
+        axes[1].set_ylabel('')
+
+        for axis in axes:
+            axis.legend()
+
+        title_suffix = metric_name if title_suffix is None else title_suffix
+        fig.suptitle(
+            f'Best {n_curves} and worst {n_curves} learning curves - {title_suffix}'
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.93))
+        fig.savefig(output_path, dpi=150)
+        plt.close(fig)
+
+    def _plot_learning_curves(
+            self,
+            df: pd.DataFrame,
+            metric_name: str,
+            axis: Axes) -> int:
+        """Plots validation and train learning curves for selected runs on an axis."""
 
         cmap = eda_utils.get_gradient_cmap()
         sampled_colors = [
-            cmap(value) for value in np.linspace(0.15, 0.95, max(len(selected_df), 1))
+            cmap(value) for value in np.linspace(0.15, 0.95, max(len(df), 1))
         ]
+        max_step = 0
 
-        for idx, (_, row) in enumerate(selected_df.iterrows()):
+        for idx, (_, row) in enumerate(df.iterrows()):
             val_steps, val_values = self._extract_metric_history(row['run_id'], metric_name)
 
-            ax.plot(
+            axis.plot(
                 val_steps,
                 val_values,
                 linestyle='-',
-                marker='o',
-                label=row['run_name'],
                 linewidth=2,
-                color=sampled_colors[idx]
+                color=sampled_colors[idx],
+                label=row['run_name']
             )
 
-            if metric_name.replace('val/', 'train/') in df.columns:
+            max_step = max(max_step, int(np.max(val_steps)))
+
+            train_metric_name = metric_name.replace('val/', 'train/')
+
+            if train_metric_name in df.columns:
                 train_steps, train_values = self._extract_metric_history(
-                    row['run_id'], metric_name.replace('val/', 'train/'))
+                    row['run_id'], train_metric_name)
                 train_steps, train_values = self._average_over_reference_windows(
                     train_steps, train_values, val_steps)
 
-                ax.plot(
+                axis.plot(
                     train_steps,
                     train_values,
                     linestyle='--',
                     linewidth=2,
                     color=sampled_colors[idx],
-                    alpha=0.6
+                    alpha=0.7
                 )
 
-        ax.set_xlabel('Step')
-        ax.set_ylabel(metric_name)
-        ax.set_title(f'{title_prefix} {n_curves} Learning Curves - {metric_name}')
-        ax.legend()
-        ax.grid(True, alpha=0.3, axis='y')
-        ax.set_axisbelow(True)
+                max_step = max(max_step, int(np.max(train_steps)))
 
-        fig.tight_layout()
-        fig.savefig(output_path, dpi=150)
-        plt.close(fig)
+        axis.set_xlabel('Step')
+        axis.set_ylabel(metric_name)
+        axis.grid(True, alpha=0.3, axis='y')
+        axis.set_axisbelow(True)
+
+        return max_step
 
     def _extract_metric_history(self,
                                 run_id: str,
@@ -252,7 +277,10 @@ class ExperimentSummarizer:
                 if any(col.startswith(prefix) for prefix in param_col_prefixes)]
 
     def _plot_metric_distributions(
-            self, df: pd.DataFrame, metric_name: str, output_dir: Path) -> None:
+            self,
+            df: pd.DataFrame,
+            metric_name: str,
+            output_dir: Path) -> None:
         """Plots metric distributions grouped by parameter values."""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -261,27 +289,94 @@ class ExperimentSummarizer:
             if df[param].nunique(dropna=False) <= 1:
                 continue
 
-            fig, ax = plt.subplots(figsize=(12, 6))
+            param_dir = output_dir / f'distribution_wrt_{param.replace("/", "-")}'
+            param_dir.mkdir(parents=True, exist_ok=True)
 
-            sns.violinplot(
-                data=df,
-                x=param,
-                y=metric_name,
-                hue=param,
-                inner='quart',
-                palette=eda_utils.get_gradient_palette_reversed(df[param].nunique()),
-                legend=False,
-                ax=ax
+            self._plot_single_param_distribution(
+                df=df,
+                param_name=param,
+                metric_name=metric_name,
+                output_path=param_dir / 'distribution.svg'
             )
 
-            ax.set_xlabel(param.rsplit('/', maxsplit=1)[-1] or param)
-            ax.set_ylabel(metric_name)
-            ax.set_title(f'Distribution of "{metric_name}" by "{param}"')
-            ax.xaxis.grid(True, 'minor', linewidth=0.25)
-            ax.set_axisbelow(True)
-            ax.tick_params(axis='x', rotation=45)
+            self._plot_best_and_worst_per_param_value(
+                df=df,
+                param_name=param,
+                metric_name=metric_name,
+                output_dir=param_dir
+            )
 
-            fig.tight_layout()
-            output_file = output_dir / f'distribution_by_{param.replace("/", "-")}.png'
-            fig.savefig(output_file, dpi=150)
-            plt.close(fig)
+    def _plot_single_param_distribution(
+            self,
+            df: pd.DataFrame,
+            param_name: str,
+            metric_name: str,
+            output_path: Path) -> None:
+        """Plots a metric distribution for a single parameter."""
+        plot_df = df[[param_name, metric_name]].copy()
+        plot_df[param_name] = plot_df[param_name].where(plot_df[param_name].notna(), 'None')
+        counts = plot_df[param_name].value_counts(dropna=False)
+
+        order = counts.index.to_series().astype(str).sort_values().index.tolist()
+        label_mapping = {
+            value: f'{value} (n={counts[value]})'
+            for value in order
+        }
+        plot_df[f'{param_name}__label'] = plot_df[param_name].map(label_mapping)
+        label_order = [label_mapping[value] for value in order]
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        sns.violinplot(
+            data=plot_df,
+            x=f'{param_name}__label',
+            y=metric_name,
+            hue=f'{param_name}__label',
+            inner='quart',
+            order=label_order,
+            palette=eda_utils.get_gradient_palette_reversed(len(label_order)),
+            legend=False,
+            ax=ax
+        )
+
+        ax.set_xlabel(param_name.rsplit('/', maxsplit=1)[-1] or param_name)
+        ax.set_ylabel(metric_name)
+        ax.set_title(f'Distribution of "{metric_name}" by "{param_name}"')
+        ax.xaxis.grid(True, 'minor', linewidth=0.25)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis='x', rotation=45)
+
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=150)
+        plt.close(fig)
+
+    def _plot_best_and_worst_per_param_value(
+            self,
+            df: pd.DataFrame,
+            param_name: str,
+            metric_name: str,
+            output_dir: Path) -> None:
+        """Plots single best and worst curves for each value of a parameter."""
+
+        values = df[param_name].drop_duplicates().tolist()
+
+        for value in values:
+            if pd.isna(value):
+                subset_df = df[df[param_name].isna()].copy()
+                value_name = 'None'
+            else:
+                subset_df = df[df[param_name] == value].copy()
+                value_name = str(value)
+
+            output_path = output_dir / f'curves_{self._sanitize_name(value_name)}.svg'
+            self._plot_best_and_worst_curves(
+                sorted_df=subset_df,
+                metric_name=metric_name,
+                output_path=output_path,
+                n_curves=1,
+                title_suffix=f'{param_name}={value_name}'
+            )
+
+    def _sanitize_name(self, value: str) -> str:
+        """Sanitizes a string for usage in file names."""
+        return value.replace('/', '-').replace(' ', '_')
