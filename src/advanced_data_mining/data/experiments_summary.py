@@ -89,7 +89,11 @@ class ExperimentSummarizer:
                 self._config.draw_n_worst_curves, metric_dir / 'worst_curves.png', best=False
             )
 
-            self._plot_metric_distributions(sorted_df, metric_cfg.name, metric_dir)
+            self._plot_metric_distributions(
+                sorted_df,
+                metric_cfg.name,
+                metric_dir / 'distribution_wrt_params'
+            )
 
     def _create_summary_dataframe(self) -> pd.DataFrame:
         """Builds a summary dataframe for all runs."""
@@ -179,7 +183,7 @@ class ExperimentSummarizer:
                 color=sampled_colors[idx]
             )
 
-            if metric_name.startswith('val/'):
+            if metric_name.replace('val/', 'train/') in df.columns:
                 train_steps, train_values = self._extract_metric_history(
                     row['run_id'], metric_name.replace('val/', 'train/'))
                 train_steps, train_values = self._average_over_reference_windows(
@@ -254,6 +258,8 @@ class ExperimentSummarizer:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for param in self._get_parameter_columns(df):
+            if df[param].nunique(dropna=False) <= 1:
+                continue
 
             fig, ax = plt.subplots(figsize=(12, 6))
 

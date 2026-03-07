@@ -19,3 +19,5 @@ experiment_summarizers:
         mode: max
       - name: val/rating_cl/rec_m
         mode: max
+      - name: epoch
+        mode: max
