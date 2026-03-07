@@ -64,9 +64,9 @@ def main(cfg: omegaconf.DictConfig) -> None:
 
         callbacks: list[pl_callbacks.Callback] = [
             pl_callbacks.EarlyStopping(
-                monitor='val/rating_cl/prec_m', min_delta=-0.005,
+                monitor='val/total_loss', min_delta=0.0,
                 patience=cfg.run_cfg.early_stopping_patience,
-                mode='max',
+                mode='min',
                 verbose=True)
         ]
 
@@ -89,6 +89,11 @@ def main(cfg: omegaconf.DictConfig) -> None:
             'optimizer_cfg': optimizer_cfg,
             'ds_cfg': ds_cfg
         })
+
+        model_size = sum(
+            parameter.numel() for parameter in model.parameters() if parameter.requires_grad
+        )
+        mlflow_logger.log_metrics({'model_size': model_size})
 
         if cfg.run_cfg.save_checkpoints:
             callbacks.append(pl_callbacks.ModelCheckpoint(
