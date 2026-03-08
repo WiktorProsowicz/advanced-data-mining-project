@@ -141,13 +141,17 @@ class RatingPredictor(pl.LightningModule):
 
         self._val_cl_metrics_coarse = torchmetrics.MetricCollection(
             {
-                'accuracy': torchmetrics.Accuracy('multiclass', num_classes=3),
-                'f1': torchmetrics.F1Score('multiclass', num_classes=3, average='macro'),
-                'prec': torchmetrics.Precision('multiclass', num_classes=3, average='macro'),
-                'rec': torchmetrics.Recall('multiclass', num_classes=3, average='macro'),
+                'accuracy': torchmetrics.Accuracy('multiclass', num_classes=2),
+                'f1': torchmetrics.F1Score('multiclass', num_classes=2, average='macro'),
+                'prec': torchmetrics.Precision('multiclass', num_classes=2, average='macro'),
+                'rec': torchmetrics.Recall('multiclass', num_classes=2, average='macro'),
             },
             prefix='val/rating_cl_coarse/'
         )
+
+        self._rating_cl_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
+                                                                num_classes=5,
+                                                                normalize='true')
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(self.parameters(),
@@ -257,7 +261,15 @@ class RatingPredictor(pl.LightningModule):
             for cl, value in enumerate(values, 1):
                 self.log(f'{metric_name}/class_{cl}', value)
 
+        tensorboard = self.loggers[1].experiment  # type: ignore
+
+        fig, _ = self._rating_cl_conf_mat.plot()
+        tensorboard.add_figure(
+            'val/confusion_matrix', fig, self.current_epoch
+        )
+
         self._val_cl_metrics_classwise.reset()
+        self._rating_cl_conf_mat.reset()
 
     def _calculate_losses(self,
                           cl_preds: torch.Tensor,
@@ -305,18 +317,16 @@ class RatingPredictor(pl.LightningModule):
     def _fine_to_coarse(self,
                         fine_probs: torch.Tensor,
                         fine_labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Converts fine-grained 5-class probabilities to coarse-grained 3-class labels."""
+        """Converts fine-grained 5-class probabilities to coarse-grained 2-class labels."""
 
         fine_predictions = torch.argmax(fine_probs, dim=-1)
 
         coarse_preds = torch.zeros_like(fine_predictions)
-        coarse_preds[fine_predictions <= 1] = 0
-        coarse_preds[(fine_predictions == 2)] = 1
-        coarse_preds[fine_predictions >= 3] = 2
+        coarse_preds[fine_predictions <= 2] = 0
+        coarse_preds[fine_predictions >= 3] = 1
 
         coarse_labels = torch.zeros_like(fine_labels)
-        coarse_labels[fine_labels <= 1] = 0
-        coarse_labels[(fine_labels == 2)] = 1
-        coarse_labels[fine_labels >= 3] = 2
+        coarse_labels[fine_labels <= 2] = 0
+        coarse_labels[fine_labels >= 3] = 1
 
         return coarse_preds, coarse_labels
