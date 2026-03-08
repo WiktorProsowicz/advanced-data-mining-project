@@ -132,7 +132,7 @@ class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
 
         collated_batch: dict[str, torch.Tensor] = {}
 
-        for feat_name in self._supported_categorized_features() + ['rating']:
+        for feat_name in self._supported_categorized_features() + ['rating', 'is_translated']:
             collated_batch[feat_name] = torch.stack([sample[feat_name] for sample in batch])
 
         for cs, ss in self._supported_trace_features():

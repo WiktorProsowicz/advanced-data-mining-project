@@ -88,7 +88,7 @@ class RatingPredictor(pl.LightningModule):
         self._supported_trace_features = model_cfg.supported_trace_features
 
         self._reg_loss = torch.nn.MSELoss()
-        self._translation_cl_loss = torch.nn.CrossEntropyLoss()
+        self._translation_cl_loss = torch.nn.BCEWithLogitsLoss()
         self._cl_loss = torch.nn.CrossEntropyLoss(
             weight=torch.tensor(training_cfg.classification_classes_weights)
         )
@@ -213,7 +213,8 @@ class RatingPredictor(pl.LightningModule):
             self.log_dict(self._train_reg_metrics, on_step=True)
 
         if self._training_cfg.translation_cl_loss_weight is not None:
-            self._train_trans_cl_metrics(translation_cl_preds, batch['is_translated'])
+            self._train_trans_cl_metrics(translation_cl_preds,
+                                         batch['is_translated'].to(torch.float))
             self.log_dict(self._train_trans_cl_metrics, on_step=True)
 
         return losses['total_loss']
@@ -235,6 +236,7 @@ class RatingPredictor(pl.LightningModule):
         self.log_dict(self._val_cl_metrics, on_epoch=True)
 
         self._val_cl_metrics_classwise.update(classification_preds, batch['rating'] - 1)
+        self._rating_cl_conf_mat.update(classification_preds, batch['rating'] - 1)
 
         coarse_preds, coarse_labels = self._fine_to_coarse(classification_preds,
                                                            batch['rating'] - 1)
@@ -246,7 +248,7 @@ class RatingPredictor(pl.LightningModule):
             self.log_dict(self._val_reg_metrics, on_epoch=True)
 
         if self._training_cfg.translation_cl_loss_weight is not None:
-            self._val_trans_cl_metrics(translation_cl_preds, batch['is_translated'])
+            self._val_trans_cl_metrics(translation_cl_preds, batch['is_translated'].to(torch.float))
             self.log_dict(self._val_trans_cl_metrics, on_epoch=True)
 
     def on_validation_epoch_end(self) -> None:
@@ -272,8 +274,8 @@ class RatingPredictor(pl.LightningModule):
         }
 
         if self._training_cfg.translation_cl_loss_weight is not None:
-            translation_cl_loss = self._translation_cl_loss(
-                translation_cl_preds, batch['is_translated'])
+            translation_cl_loss = self._translation_cl_loss(translation_cl_preds,
+                                                            batch['is_translated'].to(torch.float))
             losses['translation_cl_cross_entropy'] = translation_cl_loss
             total_loss += self._training_cfg.translation_cl_loss_weight * translation_cl_loss
 

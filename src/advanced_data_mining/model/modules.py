@@ -167,8 +167,10 @@ class PostNet(torch.nn.Module):
             ]
         )
 
-        self._classification_output = torch.nn.Linear(cfg.hidden_dims[-1], 5)
-        self._translation_classification_output = torch.nn.Linear(cfg.hidden_dims[-1], 1)
+        self._classification_output = torch.nn.Linear(cfg.hidden_dims[-1],
+                                                      5, bias=False)
+        self._translation_classification_output = torch.nn.Linear(cfg.hidden_dims[-1],
+                                                                  1, bias=False)
         self._regression_output = torch.nn.Linear(cfg.hidden_dims[-1], 1)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
