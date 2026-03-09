@@ -7,7 +7,7 @@ import hydra
 import mlflow
 import omegaconf
 
-from advanced_data_mining.data import experiments_summary
+from advanced_data_mining.data.experiments import experiment_summarizer
 from advanced_data_mining.utils import logging_utils
 
 
@@ -41,14 +41,14 @@ def main(cfg: omegaconf.DictConfig) -> None:
         _logger().info('Processing summarizer for experiment: %s',
                        summarizer_cfg.experiment_name)
 
-        summarizer_config = experiments_summary.ExperimentSummarizerConfig.model_validate(
+        summarizer_config = experiment_summarizer.ExperimentSummarizerConfig.model_validate(
             {
                 **global_summarizer_config,
                 **omegaconf.OmegaConf.to_container(summarizer_cfg),  # type: ignore
             }
         )
 
-        summarizer = experiments_summary.ExperimentSummarizer(summarizer_config, mlflow_client)
+        summarizer = experiment_summarizer.ExperimentSummarizer(summarizer_config, mlflow_client)
         summarizer.summarize(output_dir / summarizer_cfg.experiment_name)
 
         for metric, run_id in summarizer.get_best_runs().items():
