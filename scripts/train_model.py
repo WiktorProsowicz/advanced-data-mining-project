@@ -121,7 +121,8 @@ def main(cfg: omegaconf.DictConfig) -> None:
             enable_checkpointing=cfg.run_cfg.save_checkpoints,
             check_val_every_n_epoch=1,
             log_every_n_steps=25,
-            gradient_clip_val=cfg.run_cfg.gradient_clip_val,
+            gradient_clip_val=cfg.train_cfg.gradient_clip_val,
+            gradient_clip_algorithm=cfg.train_cfg.gradient_clip_mode,
             limit_train_batches=cfg.run_cfg.limit_train_batches,
 
         )

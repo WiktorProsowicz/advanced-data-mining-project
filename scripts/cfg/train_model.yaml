@@ -15,7 +15,6 @@ run_cfg:
   batch_size: 32
   n_workers: 8
   train_val_split: 0.9
-  gradient_clip_val: 1.0
   save_checkpoints: true
   limit_train_batches: null
 
@@ -36,6 +35,8 @@ train_cfg:
   classification_classes_weights: [0.09, 0.28, 0.33, 0.28, 0.03]
   reg_loss_weight: null
   translation_cl_loss_weight: null
+  gradient_clip_val: 1.0
+  gradient_clip_mode: norm
 
 optimizer_cfg:
   lr: 0.0005

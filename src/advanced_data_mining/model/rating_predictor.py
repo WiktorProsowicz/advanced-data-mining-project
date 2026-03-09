@@ -2,6 +2,7 @@
 from typing import Dict
 from typing import Tuple
 from typing import Annotated
+from typing import Literal
 
 from pydantic import Field
 import lightning as pl
@@ -34,6 +35,14 @@ class TrainingConfiguration(pydantic.BaseModel):
         description=('Weight for loss guiding the classification of translated reviews.'
                      'If None, translation classification loss is not used.')
     )] = None
+
+    gradient_clip_val: Annotated[float | None, Field(
+        description='Gradient clipping value passed to the trainer.'
+    )] = None
+
+    gradient_clip_mode: Annotated[Literal['norm', 'value'], Field(
+        description='Gradient clipping mode passed to the trainer.'
+    )] = 'norm'
 
 
 class ModelConfiguration(pydantic.BaseModel):
