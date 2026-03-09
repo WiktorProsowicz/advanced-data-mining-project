@@ -93,11 +93,14 @@ class ExperimentSummarizer:
                 metric_dir
             )
 
-    def get_best_runs(self) -> dict[str, str]:
-        """Returns best runs for configured metrics as metric-to-run mapping.
+    def get_best_runs(self, take_best_runs_by: list[MetricConfig]) -> dict[str, str]:
+        """Returns best runs for selected metrics as metric-to-run mapping.
 
-        For each configured metric, the single best run is selected according to
+        For each selected metric, the single best run is selected according to
         the metric mode (``min``/``max``).
+
+        Args:
+            take_best_runs_by: Metric definitions used specifically to choose best runs.
 
         Returns:
             A dictionary mapping metrics to run identifiers that achieved the best value for
@@ -107,7 +110,7 @@ class ExperimentSummarizer:
 
         best_runs: dict[str, str] = {}
 
-        for metric_cfg in self._config.take_metrics:
+        for metric_cfg in take_best_runs_by:
             metric_name = metric_cfg.name
 
             if metric_name not in df.columns:

@@ -19,7 +19,19 @@ take_metrics:
   - name: model_size
     mode: min
 
+take_best_runs_by:
+  - name: val/rating_cl_cross_entropy
+    mode: min
+  - name: val/rating_cl/accuracy
+    mode: max
+  - name: val/rating_cl_coarse/prec
+    mode: max
+
+plot_best_runs_wrt_parameters:
+  - train_cfg/gradient_clip_val
+  - optimizer_cfg/lr
+
 experiment_summarizers:
   - experiment_name: finding_baseline
-  - experiment_name: enhance_regularization_in_baseline
+  - experiment_name: enhancing_regularization_in_baseline
         

@@ -1,5 +1,4 @@
 """Runs testing on models corresponding to a given experiment and composes stats summary."""
-import json
 import logging
 import pathlib
 
@@ -7,7 +6,7 @@ import hydra
 import mlflow
 import omegaconf
 
-from advanced_data_mining.data.experiments import experiment_summarizer
+from advanced_data_mining.data.experiments import best_runs_summarizer, experiment_summarizer
 from advanced_data_mining.utils import logging_utils
 
 
@@ -28,13 +27,19 @@ def main(cfg: omegaconf.DictConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     mlflow_client = mlflow.tracking.MlflowClient(cfg.mlflow_server_uri)
+
     global_summarizer_config = {
         'draw_n_best_curves': cfg.draw_n_best_curves,
         'draw_n_worst_curves': cfg.draw_n_worst_curves,
         'take_metrics': omegaconf.OmegaConf.to_container(cfg.take_metrics),
     }
+
+    take_best_runs_by = [
+        experiment_summarizer.MetricConfig.model_validate(metric)
+        for metric in omegaconf.OmegaConf.to_container(cfg.take_best_runs_by)  # type: ignore
+    ]
     global_best_runs_by_metric: dict[str, list[str]] = {
-        metric: [] for metric in global_summarizer_config['take_metrics']
+        metric.name: [] for metric in take_best_runs_by
     }
 
     for summarizer_cfg in cfg.experiment_summarizers:
@@ -51,11 +56,20 @@ def main(cfg: omegaconf.DictConfig) -> None:
         summarizer = experiment_summarizer.ExperimentSummarizer(summarizer_config, mlflow_client)
         summarizer.summarize(output_dir / summarizer_cfg.experiment_name)
 
-        for metric, run_id in summarizer.get_best_runs().items():
+        for metric, run_id in summarizer.get_best_runs(take_best_runs_by).items():
             global_best_runs_by_metric[metric].append(run_id)
 
         _logger().info('Completed summarization for experiment: %s',
                        summarizer_cfg.experiment_name)
+
+    global_summarizer = best_runs_summarizer.BestRunsSummarizer(
+        mlflow_client,
+        list(cfg.plot_best_runs_wrt_parameters)
+    )
+    global_summarizer.summarize(
+        best_runs_by_metric=global_best_runs_by_metric,
+        output_path=output_dir / 'global_summary',
+    )
 
 
 if __name__ == '__main__':
