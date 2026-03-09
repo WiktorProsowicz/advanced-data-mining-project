@@ -1,25 +1,25 @@
 ---
 mlflow_server_uri: http://localhost:5000
-output_dir: tmp/experiment_summaries/word_count_feature_types
+output_dir: tmp/experiment_summaries/finding_baseline
+draw_n_best_curves: 3
+draw_n_worst_curves: 3
+take_metrics:
+  - name: val/rating_cl_cross_entropy
+    mode: min
+  - name: val/rating_cl/accuracy
+    mode: max
+  - name: val/rating_cl_coarse/prec
+    mode: max
+  - name: val/rating_cl/prec_m
+    mode: max
+  - name: val/rating_cl/rec_m
+    mode: max
+  - name: epoch
+    mode: max
+  - name: model_size
+    mode: min
 
 experiment_summarizers:
-  - experiment_name: word_count_feature_types
-    draw_n_best_curves: 3
-    draw_n_worst_curves: 3
-    take_metrics:
-      - name: val/rating_cl_cross_entropy
-        mode: min
-      - name: val/rating_cl/accuracy
-        mode: max
-      - name: val/rating_cl_coarse/prec
-        mode: max
-      - name: val/rating_cl_coarse/rec
-        mode: max
-      - name: val/rating_cl/prec_m
-        mode: max
-      - name: val/rating_cl/rec_m
-        mode: max
-      - name: epoch
-        mode: max
-      - name: model_size
-        mode: max
+  - experiment_name: finding_baseline
+
+        

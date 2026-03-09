@@ -1,7 +1,7 @@
 """Runs testing on models corresponding to a given experiment and composes stats summary."""
 import logging
 import pathlib
-from typing import List
+from typing import Any
 
 import hydra
 import mlflow
@@ -28,13 +28,21 @@ def main(cfg: omegaconf.DictConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     mlflow_client = mlflow.tracking.MlflowClient(cfg.mlflow_server_uri)
+    global_summarizer_config = {
+        'draw_n_best_curves': cfg.draw_n_best_curves,
+        'draw_n_worst_curves': cfg.draw_n_worst_curves,
+        'take_metrics': omegaconf.OmegaConf.to_container(cfg.take_metrics),
+    }
 
     for summarizer_cfg in cfg.experiment_summarizers:
         _logger().info('Processing summarizer for experiment: %s',
                        summarizer_cfg.experiment_name)
 
         summarizer_config = experiments_summary.ExperimentSummarizerConfig.model_validate(
-            omegaconf.OmegaConf.to_container(summarizer_cfg)
+            {
+                **global_summarizer_config,
+                **omegaconf.OmegaConf.to_container(summarizer_cfg),  # type: ignore
+            }
         )
 
         summarizer = experiments_summary.ExperimentSummarizer(summarizer_config, mlflow_client)
