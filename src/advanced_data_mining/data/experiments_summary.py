@@ -271,7 +271,7 @@ class ExperimentSummarizer:
 
     def _get_parameter_columns(self, df: pd.DataFrame) -> list[str]:
         """Identifies parameter columns based on common prefixes."""
-        param_col_prefixes = ('model_cfg', 'data_cfg', 'train_cfg', 'ds_cfg')
+        param_col_prefixes = ('model_cfg', 'train_cfg', 'ds_cfg', 'optimizer_cfg')
         return [col
                 for col in df.columns
                 if any(col.startswith(prefix) for prefix in param_col_prefixes)]
