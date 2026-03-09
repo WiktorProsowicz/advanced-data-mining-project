@@ -2,7 +2,6 @@
 import json
 import logging
 from pathlib import Path
-from typing import Literal
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -13,16 +12,11 @@ from matplotlib.axes import Axes
 from pydantic import BaseModel
 
 from advanced_data_mining.data.eda import utils as eda_utils
+from advanced_data_mining.data.experiments import utils as experiment_utils
 
 
 def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
-
-
-class MetricConfig(BaseModel):
-    """Configuration for a metric to summarize."""
-    name: str
-    mode: Literal["min", "max"]
 
 
 class ExperimentSummarizerConfig(BaseModel):
@@ -30,7 +24,7 @@ class ExperimentSummarizerConfig(BaseModel):
     experiment_name: str
     draw_n_best_curves: int
     draw_n_worst_curves: int
-    take_metrics: list[MetricConfig]
+    take_metrics: list[experiment_utils.MetricConfig]
 
 
 class ExperimentSummarizer:
@@ -59,12 +53,21 @@ class ExperimentSummarizer:
         output_path = Path(output_path)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        df = self._create_summary_dataframe()
+        run_ids = experiment_utils.get_experiment_run_ids(
+            mlflow_client=self._mlflow_client,
+            experiment_name=self._config.experiment_name,
+        )
+
+        df = experiment_utils.create_summary_dataframe(
+            mlflow_client=self._mlflow_client,
+            run_ids=run_ids,
+        )
         if df.empty:
             _logger().warning('No runs found')
             return
 
-        self._save_summary_table(df, output_path / 'summary_table.csv')
+        experiment_utils.save_summary_table(df, output_path / 'summary_table.csv')
+
         self._save_dataframe_summary(df, output_path / 'summary_stats.json')
 
         for metric_cfg in self._config.take_metrics:
@@ -93,7 +96,8 @@ class ExperimentSummarizer:
                 metric_dir
             )
 
-    def get_best_runs(self, take_best_runs_by: list[MetricConfig]) -> dict[str, str]:
+    def get_best_runs(self,
+                      take_best_runs_by: list[experiment_utils.MetricConfig]) -> dict[str, str]:
         """Returns best runs for selected metrics as metric-to-run mapping.
 
         For each selected metric, the single best run is selected according to
@@ -106,7 +110,15 @@ class ExperimentSummarizer:
             A dictionary mapping metrics to run identifiers that achieved the best value for
                 those metrics.
         """
-        df = self._create_summary_dataframe()
+        run_ids = experiment_utils.get_experiment_run_ids(
+            mlflow_client=self._mlflow_client,
+            experiment_name=self._config.experiment_name,
+        )
+
+        df = experiment_utils.create_summary_dataframe(
+            mlflow_client=self._mlflow_client,
+            run_ids=run_ids,
+        )
 
         best_runs: dict[str, str] = {}
 
@@ -126,44 +138,6 @@ class ExperimentSummarizer:
 
         return best_runs
 
-    def _create_summary_dataframe(self) -> pd.DataFrame:
-        """Builds a summary dataframe for all runs."""
-        data = []
-        experiment = self._mlflow_client.get_experiment_by_name(
-            self._config.experiment_name
-        )
-
-        if not experiment:
-            _logger().warning('Experiment not found: %s', self._config.experiment_name)
-            return pd.DataFrame()
-
-        runs = self._mlflow_client.search_runs(experiment.experiment_id)
-
-        for run in runs:
-            row = {'run_name': run.data.tags.get('mlflow.runName', run.info.run_id),
-                   'run_id': run.info.run_id}
-
-            row.update(run.data.metrics)
-            row.update(dict(run.data.params))
-
-            data.append(row)
-
-        df = pd.DataFrame(data)
-
-        for column in self._get_parameter_columns(df):
-
-            numeric_values = pd.to_numeric(df[column], errors='coerce')
-            if numeric_values.notna().sum() == df[column].notna().sum():
-                df[column] = numeric_values
-
-        return df
-
-    def _save_summary_table(self, df: pd.DataFrame, output_path: Path) -> None:
-        """Saves the summary table to CSV."""
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(output_path, index=False)
-
     def _save_dataframe_summary(self, df: pd.DataFrame, output_path: Path) -> None:
         """Saves dataframe summary statistics."""
         output_path = Path(output_path)
@@ -178,7 +152,7 @@ class ExperimentSummarizer:
             metric_name: str,
             output_path: Path,
             n_curves: int,
-            title_suffix: str | None = None) -> None:
+            title_suffix: str) -> None:
         """Plots best and worst learning curves for a sorted metric dataframe."""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -206,7 +180,6 @@ class ExperimentSummarizer:
         for axis in axes:
             axis.legend()
 
-        title_suffix = metric_name if title_suffix is None else title_suffix
         fig.suptitle(
             f'Best {n_curves} and worst {n_curves} learning curves - {title_suffix}'
         )
@@ -228,7 +201,11 @@ class ExperimentSummarizer:
         max_step = 0
 
         for idx, (_, row) in enumerate(df.iterrows()):
-            val_steps, val_values = self._extract_metric_history(row['run_id'], metric_name)
+            val_steps, val_values = experiment_utils.extract_metric_history(
+                mlflow_client=self._mlflow_client,
+                run_id=row['run_id'],
+                metric_name=metric_name,
+            )
 
             axis.plot(
                 val_steps,
@@ -244,9 +221,12 @@ class ExperimentSummarizer:
             train_metric_name = metric_name.replace('val/', 'train/')
 
             if train_metric_name in df.columns:
-                train_steps, train_values = self._extract_metric_history(
-                    row['run_id'], train_metric_name)
-                train_steps, train_values = self._average_over_reference_windows(
+                train_steps, train_values = experiment_utils.extract_metric_history(
+                    mlflow_client=self._mlflow_client,
+                    run_id=row['run_id'],
+                    metric_name=train_metric_name,
+                )
+                train_steps, train_values = experiment_utils.average_over_reference_windows(
                     train_steps, train_values, val_steps)
 
                 axis.plot(
@@ -267,48 +247,6 @@ class ExperimentSummarizer:
 
         return max_step
 
-    def _extract_metric_history(self,
-                                run_id: str,
-                                metric_name: str) -> tuple[np.ndarray, np.ndarray]:
-        """Extracts metric history arrays from a run."""
-        metric_history = self._mlflow_client.get_metric_history(run_id, metric_name)
-
-        steps = np.array([m.step for m in metric_history])
-        values = np.array([m.value for m in metric_history])
-
-        return steps, values
-
-    def _average_over_reference_windows(self,
-                                        source_steps: np.ndarray,
-                                        source_values: np.ndarray,
-                                        reference_steps: np.ndarray
-                                        ) -> tuple[np.ndarray, np.ndarray]:
-        """Averages source metric values in windows defined by reference steps."""
-        if len(source_steps) == 0 or len(reference_steps) == 0:
-            return np.array([]), np.array([])
-
-        averaged_steps = []
-        averaged_values = []
-        previous_step = -np.inf
-
-        for step in reference_steps:
-            window = (source_steps > previous_step) & (source_steps <= step)
-
-            if np.any(window):
-                averaged_steps.append(step)
-                averaged_values.append(np.mean(source_values[window]))
-
-            previous_step = step
-
-        return np.array(averaged_steps), np.array(averaged_values)
-
-    def _get_parameter_columns(self, df: pd.DataFrame) -> list[str]:
-        """Identifies parameter columns based on common prefixes."""
-        param_col_prefixes = ('model_cfg', 'train_cfg', 'ds_cfg', 'optimizer_cfg')
-        return [col
-                for col in df.columns
-                if any(col.startswith(prefix) for prefix in param_col_prefixes)]
-
     def _plot_metric_distributions(
             self,
             df: pd.DataFrame,
@@ -318,7 +256,7 @@ class ExperimentSummarizer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        for param in self._get_parameter_columns(df):
+        for param in experiment_utils.get_parameter_columns(df):
             if df[param].nunique(dropna=False) <= 1:
                 continue
 
@@ -401,7 +339,7 @@ class ExperimentSummarizer:
                 subset_df = df[df[param_name] == value].copy()
                 value_name = str(value)
 
-            output_path = output_dir / f'curves_{self._sanitize_name(value_name)}.svg'
+            output_path = output_dir / f'curves_{experiment_utils.sanitize_name(value_name)}.svg'
             self._plot_best_and_worst_curves(
                 sorted_df=subset_df,
                 metric_name=metric_name,
@@ -409,7 +347,3 @@ class ExperimentSummarizer:
                 n_curves=1,
                 title_suffix=f'{param_name}={value_name}'
             )
-
-    def _sanitize_name(self, value: str) -> str:
-        """Sanitizes a string for usage in file names."""
-        return value.replace('/', '-').replace(' ', '_')

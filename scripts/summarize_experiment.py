@@ -6,7 +6,7 @@ import hydra
 import mlflow
 import omegaconf
 
-from advanced_data_mining.data.experiments import best_runs_summarizer, experiment_summarizer
+from advanced_data_mining.data.experiments import best_runs_summarizer, experiment_summarizer, utils as experiment_utils
 from advanced_data_mining.utils import logging_utils
 
 
@@ -35,7 +35,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
     }
 
     take_best_runs_by = [
-        experiment_summarizer.MetricConfig.model_validate(metric)
+        experiment_utils.MetricConfig.model_validate(metric)
         for metric in omegaconf.OmegaConf.to_container(cfg.take_best_runs_by)  # type: ignore
     ]
     global_best_runs_by_metric: dict[str, list[str]] = {
