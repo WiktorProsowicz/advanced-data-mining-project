@@ -93,6 +93,36 @@ class ExperimentSummarizer:
                 metric_dir
             )
 
+    def get_best_runs(self) -> dict[str, str]:
+        """Returns best runs for configured metrics as metric-to-run mapping.
+
+        For each configured metric, the single best run is selected according to
+        the metric mode (``min``/``max``).
+
+        Returns:
+            A dictionary mapping metrics to run identifiers that achieved the best value for
+                those metrics.
+        """
+        df = self._create_summary_dataframe()
+
+        best_runs: dict[str, str] = {}
+
+        for metric_cfg in self._config.take_metrics:
+            metric_name = metric_cfg.name
+
+            if metric_name not in df.columns:
+                _logger().warning('Metric %s not found in runs', metric_name)
+                continue
+
+            if metric_cfg.mode == 'min':
+                best_index = df[metric_name].idxmin()
+            else:
+                best_index = df[metric_name].idxmax()
+
+            best_runs[metric_name] = df.loc[best_index, 'run_id']
+
+        return best_runs
+
     def _create_summary_dataframe(self) -> pd.DataFrame:
         """Builds a summary dataframe for all runs."""
         data = []
