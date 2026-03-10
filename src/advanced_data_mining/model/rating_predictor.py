@@ -44,6 +44,10 @@ class TrainingConfiguration(pydantic.BaseModel):
         description='Gradient clipping mode passed to the trainer.'
     )] = 'norm'
 
+    label_smoothing_eps: Annotated[float, Field(
+        description='Epsilon value for label smoothing in classification loss.'
+    )] = 0.0
+
 
 class ModelConfiguration(pydantic.BaseModel):
     """Configuration for model architecture."""
@@ -99,7 +103,8 @@ class RatingPredictor(pl.LightningModule):
         self._reg_loss = torch.nn.MSELoss()
         self._translation_cl_loss = torch.nn.BCEWithLogitsLoss()
         self._cl_loss = torch.nn.CrossEntropyLoss(
-            weight=torch.tensor(training_cfg.classification_classes_weights)
+            weight=torch.tensor(training_cfg.classification_classes_weights),
+            label_smoothing=training_cfg.label_smoothing_eps
         )
 
         self._train_cl_metrics = torchmetrics.MetricCollection(
