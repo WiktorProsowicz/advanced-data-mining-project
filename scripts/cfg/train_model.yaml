@@ -1,27 +1,24 @@
 ---
 run_cfg:
   mlflow_server_uri: http://localhost:5000
-  mlflow_experiment: sample_experiment
+  mlflow_experiment: debug
   mlflow_run: sample_run
   seed: 2137
-  max_epochs: 10
-  swa:
-    start: 5
-    anneal: 2
-    lr: 0.0001
+  max_epochs: 30
+  swa: null
   early_stopping_patience: 3
   ds_path: data/processed_reviews_poland
   ds_metadata_path: data/processing_metadata_poland
-  batch_size: 32
+  batch_size: 64
   n_workers: 8
   train_val_split: 0.9
   save_checkpoints: true
-  limit_train_batches: null
+  limit_train_batches: 400
 
 data_loader_cfg:
   use_bert_embeddings: sentence
   word_count_vector_type: tfidf
-  use_top_k_words: 4000
+  use_top_k_words: 7000
   pos_count_vector_type: count_normalized
   use_categorized_features:
     - Meal type
@@ -33,35 +30,36 @@ data_loader_cfg:
 
 train_cfg:
   classification_classes_weights: [0.09, 0.28, 0.33, 0.28, 0.03]
+  label_smoothing_eps: 0.05
   reg_loss_weight: null
   translation_cl_loss_weight: null
-  gradient_clip_val: 1.0
+  gradient_clip_val: 0.5
   gradient_clip_mode: norm
 
 optimizer_cfg:
-  lr: 0.0005
+  lr: 0.00003
   weight_decay: 0.0001
 
 model_cfg:
   bert_encoder:
     input_dim: 1536
     hidden_dims: [512, 256]
-    dropout_rate: 0.1
+    dropout_rate: 0.4
     sequence_prenet_cfg:
       input_dim: 1536
-      dropout_rate: 0.1
+      dropout_rate: 0.3
       num_attention_heads: 8
       num_self_attention_blocks: 2
       lstm_hidden_dim: 768
   word_count_encoder:
-    input_dim: 4000
+    input_dim: 7000
     hidden_dims: [512, 256]
-    dropout_rate: 0.1
+    dropout_rate: 0.4
     sequence_prenet_cfg: null
   pos_count_encoder:
     input_dim: 10
     hidden_dims: [8, 4]
-    dropout_rate: 0.1
+    dropout_rate: 0.4
     kan_grid_size: 5
     kan_spline_order: 3
   cat_features_encoders:
@@ -78,12 +76,12 @@ model_cfg:
   num_features_encoder:
     input_dim: 10
     hidden_dims: [8, 4]
-    dropout_rate: 0.1
+    dropout_rate: 0.4
     kan_grid_size: 5
     kan_spline_order: 3
   post_net:
     input_dim: 520
-    hidden_dims: [256, 128]
-    dropout_rate: 0.1
+    hidden_dims: [128]
+    dropout_rate: 0.4
     kan_grid_size: 5
     kan_spline_order: 3
