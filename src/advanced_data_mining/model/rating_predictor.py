@@ -218,7 +218,9 @@ class RatingPredictor(pl.LightningModule):
 
         self.log_dict({f'train/{name}': loss for name, loss in losses.items()}, on_step=True)
 
-        self._train_cl_metrics(classification_preds, batch['rating'] - 1)
+        final_class_preds = self._get_final_class_preds(classification_preds, reg_preds)
+
+        self._train_cl_metrics(final_class_preds, batch['rating'] - 1)
         self.log_dict(self._train_cl_metrics, on_step=True)
 
         if self._training_cfg.translation_cl_loss_weight is not None:
@@ -241,13 +243,15 @@ class RatingPredictor(pl.LightningModule):
 
         self.log_dict({f'val/{name}': loss for name, loss in losses.items()}, on_epoch=True)
 
-        self._val_cl_metrics(classification_preds, batch['rating'] - 1)
+        final_class_preds = self._get_final_class_preds(classification_preds, reg_preds)
+
+        self._val_cl_metrics(final_class_preds, batch['rating'] - 1)
         self.log_dict(self._val_cl_metrics, on_epoch=True)
 
-        self._val_cl_metrics_classwise.update(classification_preds, batch['rating'] - 1)
-        self._rating_cl_conf_mat.update(classification_preds, batch['rating'] - 1)
+        self._val_cl_metrics_classwise.update(final_class_preds, batch['rating'] - 1)
+        self._rating_cl_conf_mat.update(final_class_preds, batch['rating'] - 1)
 
-        coarse_preds, coarse_labels = self._fine_to_coarse(classification_preds,
+        coarse_preds, coarse_labels = self._fine_to_coarse(final_class_preds,
                                                            batch['rating'] - 1)
         self._val_cl_metrics_coarse(coarse_preds, coarse_labels)
         self.log_dict(self._val_cl_metrics_coarse, on_epoch=True)
@@ -281,7 +285,7 @@ class RatingPredictor(pl.LightningModule):
 
         cl_loss = self._cl_loss(cl_preds, batch['rating'] - 1)
 
-        reg_squared_error = self._reg_loss(reg_preds.squeeze(-1), batch['rating'].to(torch.float))
+        reg_squared_error = self._reg_loss(reg_preds, batch['rating'].to(torch.float))
         sample_weights = self._class_weights.to(reg_preds.device)[batch['rating'] - 1]
         reg_loss = torch.mean(sample_weights * reg_squared_error)
 
@@ -303,25 +307,21 @@ class RatingPredictor(pl.LightningModule):
             'total_loss': total_loss
         }
 
-    def sanitize_outputs(self,
-                         reg_outputs: torch.Tensor,
-                         cl_outputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Converts raw batched model outputs into rating predictions."""
+    def _get_final_class_preds(self,
+                               cl_outputs: torch.Tensor,
+                               reg_outputs: torch.Tensor) -> torch.Tensor:
+        """Converts model outputs into final class predictions based on selected task."""
 
-        reg_possible_values = torch.tensor([1, 2, 3, 4, 5])
+        if self._training_cfg.use_classification_loss:
+            return torch.argmax(cl_outputs, dim=-1)
 
-        bucket_indices = torch.bucketize(reg_outputs, reg_possible_values) - 1
-        reg_sanitized_out = reg_possible_values[bucket_indices]
-
-        return torch.argmax(cl_outputs, -1), reg_sanitized_out
+        return torch.clamp(torch.round(reg_outputs), min=1, max=5).to(torch.long) - 1
 
     @torch.no_grad()
     def _fine_to_coarse(self,
-                        fine_probs: torch.Tensor,
+                        fine_predictions: torch.Tensor,
                         fine_labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Converts fine-grained 5-class probabilities to coarse-grained 2-class labels."""
-
-        fine_predictions = torch.argmax(fine_probs, dim=-1)
+        """Converts fine-grained 5-class predictions to coarse-grained 2-class labels."""
 
         coarse_preds = torch.zeros_like(fine_predictions)
         coarse_preds[fine_predictions <= 2] = 0
