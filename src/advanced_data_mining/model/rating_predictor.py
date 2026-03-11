@@ -20,6 +20,9 @@ class OptimizerConfiguration(pydantic.BaseModel):
     """Configuration for optimizer."""
     lr: float = 0.001
     weight_decay: float = 0.0001
+    lr_scheduler_gamma: Annotated[float, Field(
+        description='Multiplicative factor applied to the learning rate each epoch.'
+    )] = 1.0
 
 
 class TrainingConfiguration(pydantic.BaseModel):
@@ -157,10 +160,15 @@ class RatingPredictor(pl.LightningModule):
                                                                 num_classes=5,
                                                                 normalize='true')
 
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.parameters(),
-                                lr=self._optimizer_cfg.lr,
-                                weight_decay=self._optimizer_cfg.weight_decay)
+    def configure_optimizers(self):  # type: ignore[no-untyped-def]
+        optimizer = torch.optim.Adam(self.parameters(),
+                                     lr=self._optimizer_cfg.lr,
+                                     weight_decay=self._optimizer_cfg.weight_decay)
+
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=self._optimizer_cfg.lr_scheduler_gamma)
+
+        return [optimizer], [scheduler]
 
     def forward(self,  # pylint: disable=arguments-differ
                 inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
