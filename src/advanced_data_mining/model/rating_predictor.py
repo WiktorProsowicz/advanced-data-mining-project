@@ -3,6 +3,7 @@ from typing import Dict
 from typing import Tuple
 from typing import Annotated
 from typing import Literal
+import itertools
 
 from pydantic import Field
 import lightning as pl
@@ -113,8 +114,6 @@ class RatingPredictor(pl.LightningModule):
         self._train_cl_metrics = torchmetrics.MetricCollection(
             {
                 'accuracy': torchmetrics.Accuracy('multiclass', num_classes=5),
-                'f1_m': torchmetrics.F1Score('multiclass', num_classes=5, average='macro'),
-                'f1_w': torchmetrics.F1Score('multiclass', num_classes=5, average='weighted'),
                 'prec_m': torchmetrics.Precision('multiclass', num_classes=5, average='macro'),
                 'prec_w': torchmetrics.Precision('multiclass', num_classes=5, average='weighted'),
                 'rec_m': torchmetrics.Recall('multiclass', num_classes=5, average='macro'),
@@ -126,7 +125,6 @@ class RatingPredictor(pl.LightningModule):
         self._train_trans_cl_metrics = torchmetrics.MetricCollection(
             {
                 'accuracy': torchmetrics.Accuracy(task='binary'),
-                'f1': torchmetrics.F1Score(task='binary', average='macro'),
                 'precision': torchmetrics.Precision(task='binary', average='macro'),
                 'recall': torchmetrics.Recall(task='binary', average='macro'),
                 'auroc': torchmetrics.AUROC(task='binary')
@@ -140,22 +138,19 @@ class RatingPredictor(pl.LightningModule):
 
         self._val_cl_metrics_classwise = torchmetrics.MetricCollection(
             {
-                'f1': torchmetrics.F1Score('multiclass', num_classes=5, average='none'),
-                'precision': torchmetrics.Precision('multiclass', num_classes=5, average='none'),
-                'recall': torchmetrics.Recall('multiclass', num_classes=5, average='none')
+                'prec': torchmetrics.Precision('multiclass', num_classes=5, average='none'),
+                'rec': torchmetrics.Recall('multiclass', num_classes=5, average='none')
 
             },
-            prefix='val/rating_cl/'
+            prefix='val/rating_cl_classwise/'
         )
 
-        self._val_cl_metrics_coarse = torchmetrics.MetricCollection(
+        self._val_cl_metrics_coarse_classwise = torchmetrics.MetricCollection(
             {
-                'accuracy': torchmetrics.Accuracy('multiclass', num_classes=2),
-                'f1': torchmetrics.F1Score('multiclass', num_classes=2, average='macro'),
-                'prec': torchmetrics.Precision('multiclass', num_classes=2, average='macro'),
-                'rec': torchmetrics.Recall('multiclass', num_classes=2, average='macro'),
+                'prec': torchmetrics.Precision('multiclass', num_classes=2, average='none'),
+                'rec': torchmetrics.Recall('multiclass', num_classes=2, average='none'),
             },
-            prefix='val/rating_cl_coarse/'
+            prefix='val/rating_cl_coarse_classwise/'
         )
 
         self._rating_cl_conf_mat = torchmetrics.ConfusionMatrix(task='multiclass',
@@ -253,8 +248,7 @@ class RatingPredictor(pl.LightningModule):
 
         coarse_preds, coarse_labels = self._fine_to_coarse(final_class_preds,
                                                            batch['rating'] - 1)
-        self._val_cl_metrics_coarse(coarse_preds, coarse_labels)
-        self.log_dict(self._val_cl_metrics_coarse, on_epoch=True)
+        self._val_cl_metrics_coarse_classwise.update(coarse_preds, coarse_labels)
 
         if self._training_cfg.translation_cl_loss_weight is not None:
             self._val_trans_cl_metrics(translation_cl_preds, batch['is_translated'].to(torch.float))
@@ -263,7 +257,11 @@ class RatingPredictor(pl.LightningModule):
     def on_validation_epoch_end(self) -> None:
 
         for metric_name, values in self._val_cl_metrics_classwise.compute().items():
-            for cl, value in enumerate(values, 1):
+            for cl, value in itertools.islice(enumerate(values, 1), 3):
+                self.log(f'{metric_name}/class_{cl}', value)
+
+        for metric_name, values in self._val_cl_metrics_coarse_classwise.compute().items():
+            for cl, value in zip(('bad', 'good'), values):  # type: ignore
                 self.log(f'{metric_name}/class_{cl}', value)
 
         tensorboard = self.loggers[1].experiment  # type: ignore
@@ -274,6 +272,7 @@ class RatingPredictor(pl.LightningModule):
         )
 
         self._val_cl_metrics_classwise.reset()
+        self._val_cl_metrics_coarse_classwise.reset()
         self._rating_cl_conf_mat.reset()
 
     def _calculate_losses(self,
