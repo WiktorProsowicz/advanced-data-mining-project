@@ -31,7 +31,7 @@ data_loader_cfg:
 train_cfg:
   classification_classes_weights: [0.09, 0.28, 0.33, 0.28, 0.03]
   label_smoothing_eps: 0.05
-  reg_loss_weight: null
+  use_classification_loss: true
   translation_cl_loss_weight: null
   gradient_clip_val: 0.5
   gradient_clip_mode: norm

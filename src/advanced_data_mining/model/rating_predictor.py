@@ -27,9 +27,10 @@ class TrainingConfiguration(pydantic.BaseModel):
         description='Weights for each rating class in classification loss.'
     )] = (1.0, 1.0, 1.0, 1.0, 1.0)
 
-    reg_loss_weight: Annotated[float | None, Field(
-        description='Weight for regression loss. If None, regression loss is not used.'
-    )] = None
+    use_classification_loss: Annotated[bool, Field(
+        description='If true, use weighted cross-entropy as the guidance loss. '
+                    'If false, use regression MSE as the guidance loss.'
+    )] = True
 
     translation_cl_loss_weight: Annotated[float | None, Field(
         description=('Weight for loss guiding the classification of translated reviews.'
@@ -100,10 +101,12 @@ class RatingPredictor(pl.LightningModule):
         self._optimizer_cfg = optimizer_cfg
         self._supported_trace_features = model_cfg.supported_trace_features
 
-        self._reg_loss = torch.nn.MSELoss()
+        self._class_weights = torch.tensor(training_cfg.classification_classes_weights)
+
+        self._reg_loss = torch.nn.MSELoss(reduction='none')
         self._translation_cl_loss = torch.nn.BCEWithLogitsLoss()
         self._cl_loss = torch.nn.CrossEntropyLoss(
-            weight=torch.tensor(training_cfg.classification_classes_weights),
+            weight=self._class_weights,
             label_smoothing=training_cfg.label_smoothing_eps
         )
 
@@ -120,13 +123,6 @@ class RatingPredictor(pl.LightningModule):
             prefix='train/rating_cl/'
         )
 
-        self._train_reg_metrics = torchmetrics.MetricCollection(
-            {
-                'mae': torchmetrics.MeanAbsoluteError()
-            },
-            prefix='train/rating_reg/'
-        )
-
         self._train_trans_cl_metrics = torchmetrics.MetricCollection(
             {
                 'accuracy': torchmetrics.Accuracy(task='binary'),
@@ -139,7 +135,6 @@ class RatingPredictor(pl.LightningModule):
         )
 
         self._val_cl_metrics = self._train_cl_metrics.clone(prefix='val/rating_cl/')
-        self._val_reg_metrics = self._train_reg_metrics.clone(prefix='val/rating_reg/')
         self._val_trans_cl_metrics = self._train_trans_cl_metrics.clone(
             prefix='val/translation_cl/')
 
@@ -226,10 +221,6 @@ class RatingPredictor(pl.LightningModule):
         self._train_cl_metrics(classification_preds, batch['rating'] - 1)
         self.log_dict(self._train_cl_metrics, on_step=True)
 
-        if self._training_cfg.reg_loss_weight is not None:
-            self._train_reg_metrics(reg_preds, batch['rating'].float())
-            self.log_dict(self._train_reg_metrics, on_step=True)
-
         if self._training_cfg.translation_cl_loss_weight is not None:
             self._train_trans_cl_metrics(translation_cl_preds,
                                          batch['is_translated'].to(torch.float))
@@ -261,10 +252,6 @@ class RatingPredictor(pl.LightningModule):
         self._val_cl_metrics_coarse(coarse_preds, coarse_labels)
         self.log_dict(self._val_cl_metrics_coarse, on_epoch=True)
 
-        if self._training_cfg.reg_loss_weight is not None:
-            self._val_reg_metrics(reg_preds, batch['rating'].float())
-            self.log_dict(self._val_reg_metrics, on_epoch=True)
-
         if self._training_cfg.translation_cl_loss_weight is not None:
             self._val_trans_cl_metrics(translation_cl_preds, batch['is_translated'].to(torch.float))
             self.log_dict(self._val_trans_cl_metrics, on_epoch=True)
@@ -293,10 +280,16 @@ class RatingPredictor(pl.LightningModule):
         """Calculates and returns individual losses for each output head."""
 
         cl_loss = self._cl_loss(cl_preds, batch['rating'] - 1)
-        total_loss = cl_loss
+
+        reg_squared_error = self._reg_loss(reg_preds.squeeze(-1), batch['rating'].to(torch.float))
+        sample_weights = self._class_weights.to(reg_preds.device)[batch['rating'] - 1]
+        reg_loss = torch.mean(sample_weights * reg_squared_error)
+
+        total_loss = cl_loss if self._training_cfg.use_classification_loss else reg_loss
 
         losses: Dict[str, torch.Tensor] = {
-            'rating_cl_cross_entropy': cl_loss
+            'rating_cl_cross_entropy': cl_loss,
+            'rating_reg_mse': reg_loss
         }
 
         if self._training_cfg.translation_cl_loss_weight is not None:
@@ -304,11 +297,6 @@ class RatingPredictor(pl.LightningModule):
                                                             batch['is_translated'].to(torch.float))
             losses['translation_cl_cross_entropy'] = translation_cl_loss
             total_loss += self._training_cfg.translation_cl_loss_weight * translation_cl_loss
-
-        if self._training_cfg.reg_loss_weight is not None:
-            reg_loss = self._reg_loss(reg_preds.squeeze(-1), batch['rating'].float())
-            losses['rating_reg_mse'] = reg_loss
-            total_loss += self._training_cfg.reg_loss_weight * reg_loss
 
         return {
             **losses,
