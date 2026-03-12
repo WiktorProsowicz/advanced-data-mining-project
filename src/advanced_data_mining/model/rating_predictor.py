@@ -18,40 +18,40 @@ from advanced_data_mining.model.modules import PostNet, CatFeatureEncoder
 
 class OptimizerConfiguration(pydantic.BaseModel):
     """Configuration for optimizer."""
-    lr: float = 0.001
-    weight_decay: float = 0.0001
+    lr: float
+    weight_decay: float
     lr_scheduler_gamma: Annotated[float, Field(
         description='Multiplicative factor applied to the learning rate each epoch.'
-    )] = 1.0
+    )]
 
 
 class TrainingConfiguration(pydantic.BaseModel):
     """Configuration for training."""
     classification_classes_weights: Annotated[tuple[float, ...], Field(
         description='Weights for each rating class in classification loss.'
-    )] = (1.0, 1.0, 1.0, 1.0, 1.0)
+    )]
 
     use_classification_loss: Annotated[bool, Field(
         description='If true, use weighted cross-entropy as the guidance loss. '
                     'If false, use regression MSE as the guidance loss.'
-    )] = True
+    )]
 
     translation_cl_loss_weight: Annotated[float | None, Field(
         description=('Weight for loss guiding the classification of translated reviews.'
                      'If None, translation classification loss is not used.')
-    )] = None
+    )]
 
     gradient_clip_val: Annotated[float | None, Field(
         description='Gradient clipping value passed to the trainer.'
-    )] = None
+    )]
 
     gradient_clip_mode: Annotated[Literal['norm', 'value'], Field(
         description='Gradient clipping mode passed to the trainer.'
-    )] = 'norm'
+    )]
 
     label_smoothing_eps: Annotated[float, Field(
         description='Epsilon value for label smoothing in classification loss.'
-    )] = 0.0
+    )]
 
 
 class ModelConfiguration(pydantic.BaseModel):
