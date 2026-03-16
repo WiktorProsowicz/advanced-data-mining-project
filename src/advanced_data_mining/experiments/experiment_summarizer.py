@@ -12,7 +12,7 @@ from matplotlib.axes import Axes
 from pydantic import BaseModel
 
 from advanced_data_mining.data.eda import utils as eda_utils
-from advanced_data_mining.data.experiments import utils as experiment_utils
+from advanced_data_mining.experiments import utils as experiment_utils
 
 
 def _logger() -> logging.Logger:

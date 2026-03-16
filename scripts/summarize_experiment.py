@@ -6,7 +6,7 @@ import hydra
 import mlflow
 import omegaconf
 
-from advanced_data_mining.data.experiments import best_runs_summarizer, experiment_summarizer, utils as experiment_utils
+from advanced_data_mining.experiments import best_runs_summarizer, experiment_summarizer, utils as experiment_utils
 from advanced_data_mining.utils import logging_utils
 
 
