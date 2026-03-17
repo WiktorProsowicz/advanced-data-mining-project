@@ -98,7 +98,7 @@ def main(cfg: omegaconf.DictConfig) -> None:
         if cfg.run_cfg.save_checkpoints:
             callbacks.append(pl_callbacks.ModelCheckpoint(
                 dirpath=os.path.join(mlflow.get_artifact_uri(), 'checkpoints'),
-                monitor='val/rating_cl_cross_entropy',
+                monitor='val/total_loss',
                 mode='min',
                 save_top_k=1,
                 every_n_epochs=1)

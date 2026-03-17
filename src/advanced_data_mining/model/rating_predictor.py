@@ -186,12 +186,12 @@ class RatingPredictor(pl.LightningModule):
                                               in self._cat_encoders.items()], dim=-1)
 
         if 'num_features' in self._encoders:
-            input_trace_features = torch.cat([inputs[feature]
-                                              for feature
-                                              in self._supported_trace_features], dim=-1)
+            input_trace_features = [inputs[feature]
+                                    for feature
+                                    in self._supported_trace_features]
 
             encoded_num = self._encoders['num_features'](
-                torch.cat([input_trace_features, encoded_cat_features], dim=-1))
+                torch.cat([*input_trace_features, encoded_cat_features], dim=-1))
 
         if 'word_count' in self._encoders:
             encoded_word_count = self._encoders['word_count'](inputs['word_count_vector'])
