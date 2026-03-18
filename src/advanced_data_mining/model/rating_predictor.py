@@ -262,6 +262,19 @@ class RatingPredictor(pl.LightningModule):
             self._val_trans_cl_metrics(translation_cl_preds, batch['is_translated'].to(torch.float))
             self.log_dict(self._val_trans_cl_metrics, on_epoch=True)
 
+    @torch.no_grad()
+    def predict(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """Returns final rating predictions for the provided batch.
+
+        Args:
+            inputs: Batched model inputs produced by the dataset collate function.
+
+        Returns:
+            Tensor of predicted ratings in the 1-5 scale.
+        """
+        cl_outputs, _, reg_outputs = self(inputs)
+        return self._get_final_class_preds(cl_outputs, reg_outputs) + 1
+
     def on_validation_epoch_end(self) -> None:
 
         for metric_name, values in self._val_cl_metrics_classwise.compute().items():
@@ -307,7 +320,9 @@ class RatingPredictor(pl.LightningModule):
             translation_cl_loss = self._translation_cl_loss(translation_cl_preds,
                                                             batch['is_translated'].to(torch.float))
             losses['translation_cl_cross_entropy'] = translation_cl_loss
-            total_loss += self._training_cfg.translation_cl_loss_weight * translation_cl_loss
+            total_loss = (total_loss +
+                          self._training_cfg.translation_cl_loss_weight *
+                          translation_cl_loss)
 
         return {
             **losses,
