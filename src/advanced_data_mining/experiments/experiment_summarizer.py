@@ -304,6 +304,7 @@ class ExperimentSummarizer:
             y=metric_name,
             hue=f'{param_name}__label',
             inner='quart',
+            cut=0,
             order=label_order,
             palette=eda_utils.get_gradient_palette_reversed(len(label_order)),
             legend=False,
