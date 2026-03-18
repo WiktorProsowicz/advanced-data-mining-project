@@ -288,7 +288,7 @@ class ExperimentSummarizer:
         plot_df[param_name] = plot_df[param_name].where(plot_df[param_name].notna(), 'None')
         counts = plot_df[param_name].value_counts(dropna=False)
 
-        order = counts.index.to_series().astype(str).sort_values().index.tolist()
+        order = counts.index.to_series().sort_values().index.tolist()
         label_mapping = {
             value: f'{value} (n={counts[value]})'
             for value in order
