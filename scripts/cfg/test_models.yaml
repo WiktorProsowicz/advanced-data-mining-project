@@ -1,0 +1,26 @@
+---
+mlflow_server_uri: http://localhost:5000
+test_ds_path: data/processed_reviews_poland_test
+processing_metadata_path: data/processing_metadata_poland
+batch_size: 64
+
+model_testers_cfgs:
+  - run_id: 1af2ea882bb44b6e9e8830e9e6b28c80
+    checkpoint_name: epoch=14-step=7500.ckpt
+    output_path: tmp/model_testing/finding_best_base_model
+  
+  - run_id: 08298951f3134780b5fe0000378b9132
+    checkpoint_name: epoch=14-step=7500.ckpt
+    output_path: tmp/model_testing/ablation_no_numerical_features
+
+  - run_id: 29721dc75b814938b496279d1d72ff6d
+    checkpoint_name: epoch=14-step=7500.ckpt
+    output_path: tmp/model_testing/ablation_no_classical_features
+
+  - run_id: 06b7ef034259430890af7613d298f9aa
+    checkpoint_name: epoch=13-step=7000.ckpt
+    output_path: tmp/model_testing/ablation_only_classical_features
+
+  - run_id: bde1e22ee4a94201b13b04638911dc04
+    checkpoint_name: epoch=14-step=7500.ckpt
+    output_path: tmp/model_testing/ablation_no_bert_sequences

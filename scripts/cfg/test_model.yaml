@@ -1,9 +1,0 @@
----
-mlflow_server_uri: http://localhost:5000
-output_path: tmp/model_testing
-
-model_tester_cfg:
-  run_id: 9d352071cb85494cb7fc01351e160e80
-  checkpoint_name: epoch=10-step=5500.ckpt
-  test_ds_path: data/processed_reviews_poland_test
-  processing_metadata_path: data/processing_metadata_poland
