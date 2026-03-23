@@ -1,8 +1,6 @@
 """Module that handles access to directories and files related to processed datasets."""
-
-
-import pathlib
 import json
+import pathlib
 from typing import Iterator
 
 import pydantic

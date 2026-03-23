@@ -1,14 +1,14 @@
 """A module that generates basic linguistic representations leveraging the word stats."""
-
-import pickle
 import json
-
 import pathlib
-from typing import Iterable, Iterator
-import numpy as np
+import pickle
+from typing import Iterable
+from typing import Iterator
+
 import nltk
-from sklearn.feature_extraction.text import CountVectorizer as SklearnCountVectorizer
+import numpy as np
 import pydantic
+from sklearn.feature_extraction.text import CountVectorizer as SklearnCountVectorizer
 
 from advanced_data_mining.data.structs import raw_ds
 

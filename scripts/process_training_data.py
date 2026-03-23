@@ -4,7 +4,6 @@ The generated metadata is used to ensure consistency between the training and te
 pipelines. The recources are also designed to contain all necessary information to extract features
 from raw data in online mode.
 """
-
 import logging
 import pathlib
 
@@ -12,10 +11,10 @@ import hydra
 import omegaconf
 
 from advanced_data_mining.data import processor
-from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.data.processing import count_vectorizer
 from advanced_data_mining.data.processing import embeddings
 from advanced_data_mining.data.processing import num_features
+from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.utils import logging_utils
 
 

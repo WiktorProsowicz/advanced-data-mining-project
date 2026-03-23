@@ -28,6 +28,20 @@ run_static_checks:
     source .venv/bin/activate
     pre-commit run --all-files
 
+# Run mlflow tracking server for experiment tracking and artifact storage.
+setup_mlflow_server:
+    #!/usr/bin/env bash
+    echo "Setting up MLflow server..."
+    source .venv/bin/activate
+    mlflow server --backend-store-uri sqlite:///mlflow_tracking.db --default-artifact-root ./mlflow_artifacts/ --host 0.0.0.0 --port 5000
+
+# Run TensorBoard server for visualizing training metrics and logs.
+setup_tensorboard_server:
+    #!/usr/bin/env bash
+    echo "Setting up TensorBoard..."
+    source .venv/bin/activate
+    tensorboard --host 0.0.0.0 --port 5001 --logdir tensorboard/
+
 # Run an arbitrary python script inside the virtual environment.
 run_python *args:
     #!/usr/bin/env bash

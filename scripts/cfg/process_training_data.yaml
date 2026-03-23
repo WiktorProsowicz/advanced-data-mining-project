@@ -1,3 +1,4 @@
+---
 raw_ds_path: data/raw_reviews_poland
 processed_ds_path: tmp/processed_reviews_poland
 processing_metadata_path: tmp/processing_metadata_poland
@@ -18,36 +19,36 @@ numerical_features_extractor_cfg:
     - [7, 3]
 
   categorized_options_used:
-    - name: "Meal type"
+    - name: Meal type
       supported_values:
-        - "Lunch"
-        - "Dinner"
-        - "Other"
-        - "Brunch"
-        - "Breakfast"
-    - name: "Service"
+        - Lunch
+        - Dinner
+        - Other
+        - Brunch
+        - Breakfast
+    - name: Service
       supported_values:
-        - "Dine in"
-        - "Take out"
-        - "Delivery"
-    - name: "Price per person"
+        - Dine in
+        - Take out
+        - Delivery
+    - name: Price per person
       supported_values:
-        - "zł 1-20"
-        - "zł 20-40"
-        - "zł 40-60"
-        - "zł 60-80"
-        - "zł 80-100"
+        - zł 1-20
+        - zł 20-40
+        - zł 40-60
+        - zł 60-80
+        - zł 80-100
 
   n_author_reviews_quantization:
-    - cat_name: "Up to 10"
+    - cat_name: Up to 10
       min_val: 0
       max_val: 10
-    - cat_name: "10 to 50"
+    - cat_name: 10 to 50
       min_val: 11
       max_val: 50
-    - cat_name: "50 to 100"
+    - cat_name: 50 to 100
       min_val: 51
       max_val: 100
-    - cat_name: "100 to 175"
+    - cat_name: 100 to 175
       min_val: 101
       max_val: 175

@@ -1,5 +1,4 @@
 """Utilities used for data processing."""
-
 import gruut
 
 

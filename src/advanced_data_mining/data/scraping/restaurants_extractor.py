@@ -1,12 +1,11 @@
 """Module that extracts restaurants from Google Maps page corresponding with a given query."""
-
 import logging
-from typing import Iterator, List
+from typing import List
 
 from playwright.sync_api import Locator
 from playwright.sync_api import Page
 
-from advanced_data_mining.data.raw_ds import Restaurant
+from advanced_data_mining.data.structs.raw_ds import Restaurant
 
 
 def _logger() -> logging.Logger:

@@ -1,14 +1,13 @@
 """Module that provides utilities for generating and handling data embeddings."""
-
 import dataclasses
 import logging
 from typing import Iterator
 
+import nltk
 import pydantic
+import torch
 from transformers import AutoModel
 from transformers import AutoTokenizer
-import torch
-import nltk
 
 
 class EmbeddingGeneratorConfig(pydantic.BaseModel):

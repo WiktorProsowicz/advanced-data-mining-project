@@ -1,16 +1,15 @@
 """Tools for performing exploratory data analysis (EDA) on raw datasets."""
-
-import pathlib
 import json
+import pathlib
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker
 import pandas as pd
 import seaborn as sns
 
-from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.data.eda import utils as eda_utils
 from advanced_data_mining.data.processing import utils as processing_utils
+from advanced_data_mining.data.structs import raw_ds
 
 
 class RawEDA:
@@ -19,7 +18,7 @@ class RawEDA:
     def __init__(self, raw_ds_path: str) -> None:
 
         self._raw_ds = raw_ds.RawDSLoader(raw_ds_path).load_dataset()
-        sns.set_theme(style="darkgrid")
+        sns.set_theme(style='darkgrid')
 
     def save_authors_stats(self, output_dir: pathlib.Path) -> None:
         """Dumps statistics about review authors in a given directory."""
@@ -477,7 +476,7 @@ class RawEDA:
             y='Review text length',
             hue='Is translated',
             split=True,
-            inner="quart",
+            inner='quart',
             palette=eda_utils.get_gradient_palette(2),
             fill=False,
             ax=ax

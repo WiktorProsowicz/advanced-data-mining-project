@@ -1,5 +1,4 @@
 """Script to perform exploratory data analysis (EDA) on Google Maps reviews dataset."""
-
 import logging
 import pathlib
 

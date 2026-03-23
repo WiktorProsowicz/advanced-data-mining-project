@@ -1,6 +1,5 @@
 """Utilities for performing EDA or processed ds analysis."""
-
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import seaborn as sns
@@ -20,9 +19,9 @@ def is_outlier(series: pd.Series) -> pd.Series:
 
 
 DARK_COLOR_STD = '#24403e'
-LIGHT_COLOR_STD = "#67e0da"
-MIDDLE_COLOR_STD = "#4A8F8E"
-COOL_COLOR_STD = "#67c2c7"
+LIGHT_COLOR_STD = '#67e0da'
+MIDDLE_COLOR_STD = '#4A8F8E'
+COOL_COLOR_STD = '#67c2c7'
 WARM_COLOR_STD = '#d96891'
 NEUTRAL_COLOR_STD = '#bbbbbb'
 
@@ -51,5 +50,24 @@ def get_coolwarm_cmap() -> Any:
 
     return sns.blend_palette(
         colors=[COOL_COLOR_STD, NEUTRAL_COLOR_STD, WARM_COLOR_STD],
+        as_cmap=True
+    )
+
+
+def get_gradient_palette_reversed(n: int) -> Any:
+    """Returns a reversed gradient palette (light to dark) for violin plots."""
+
+    return sns.blend_palette(
+        colors=[LIGHT_COLOR_STD, DARK_COLOR_STD],
+        n_colors=n,
+        as_cmap=False
+    )
+
+
+def get_gradient_cmap_reversed() -> Any:
+    """Returns a reversed gradient colormap (light to dark) for violin plots."""
+
+    return sns.blend_palette(
+        colors=[LIGHT_COLOR_STD, DARK_COLOR_STD],
         as_cmap=True
     )

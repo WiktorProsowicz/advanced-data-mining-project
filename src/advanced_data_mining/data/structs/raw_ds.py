@@ -1,11 +1,11 @@
 """Contains definitions of raw dataset structures and utilities for loading/saving them."""
-
 import hashlib
 import json
-from typing import Dict, Optional
-from typing import List
-from typing import TypeAlias
 import pathlib
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import TypeAlias
 
 import pydantic
 

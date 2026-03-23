@@ -1,19 +1,19 @@
 """Module that constructs stats and visualizations for processed datasets."""
-
-import pathlib
 import json
-from typing import Any, Iterator
+import pathlib
+from typing import Any
+from typing import Iterator
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
 import torch
 import tqdm
-import numpy as np
 
+from advanced_data_mining.data import ds_loading
 from advanced_data_mining.data.eda import utils as eda_utils
 from advanced_data_mining.data.structs import processed_ds
-from advanced_data_mining.data import ds_loading
 
 
 class ProcessedDatasetAnalyzer:
