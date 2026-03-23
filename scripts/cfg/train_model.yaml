@@ -1,78 +1,88 @@
 ---
 run_cfg:
-  mlflow_experiment: rating_predictor
+  mlflow_server_uri: http://localhost:5000
+  mlflow_experiment: debug
   mlflow_run: sample_run
+  seed: 2137
+  max_epochs: 30
+  swa:
+  early_stopping_patience: 3
+  ds_path: data/processed_reviews_poland
+  ds_metadata_path: data/processing_metadata_poland
+  batch_size: 64
+  n_workers: 8
+  train_val_split: 0.9
+  save_checkpoints: true
+  limit_train_batches: 400
 
-data_cfg:
-  ds_path: tmp/processed_ds_v0.2
-  batch_size: 32
-  n_workers: 12
-  train_val_split: 0.8
-  n_test_samples: 1000
+data_loader_cfg:
+  use_bert_embeddings: sentence
+  word_count_vector_type: tfidf
+  use_top_k_words: 7000
+  pos_count_vector_type: count_normalized
+  use_categorized_features:
+    - Meal type
+    - Service
+    - Price per person
+  use_trace_features:
+    - [3, 1]
+  normalize_trace_features: true
 
 train_cfg:
-  seed: 2137
-  max_epochs: 15
-  classification_classes_weights: [6.0, 15.0, 15.0, 10.0, 1.5]
-  reg_loss_weight: 0.3
-  cl_loss_weight: 1.0
-  early_stopping_patience: 3
+  classification_classes_weights: [0.09, 0.28, 0.33, 0.28, 0.03]
+  label_smoothing_eps: 0.05
+  use_classification_loss: false
+  translation_cl_loss_weight:
+  gradient_clip_val: 0.5
+  gradient_clip_mode: norm
 
 optimizer_cfg:
-  lr: 0.001
+  lr: 0.00003
   weight_decay: 0.0001
+  lr_scheduler_gamma: 1.0
 
 model_cfg:
-  bow_encoders:
-    bow_bottom:
-      input_dim: 2000
-      hidden_dims: [64, 32]
-      dropout_rate: 0.1
-    bow_top:
-      input_dim: 2000
-      hidden_dims: [64, 32]
-      dropout_rate: 0.1
-    tfidf_bottom:
-      input_dim: 2000
-      hidden_dims: [64, 32]
-      dropout_rate: 0.1
-    tfidf_top:
-      input_dim: 2000
-      hidden_dims: [64, 32]
-      dropout_rate: 0.1
-    pos_bow:
-      input_dim: 35
-      hidden_dims: [16, 8]
-      dropout_rate: 0.1
-    bow_full:
-      input_dim: 20000
-      hidden_dims: [256, 64]
-      dropout_rate: 0.1
-    tfidf_full:
-      input_dim: 20000
-      hidden_dims: [256, 64]
-      dropout_rate: 0.1
-    sentence_bert:
-      input_dim: 1024
-      hidden_dims: [128, 64]
-      dropout_rate: 0.1
-
-  numerical_feature_encoder:
-    supported_features:
-      - is_from_cracow
-      - num_words
-      - num_sentences
-      - cl_3_sz_1
-      - cl_7_sz_3
-      - cl_5_sz_3
-      - cl_3_sz_2
-      - cl_5_sz_2
-    params:
-      input_dim: 13
-      hidden_dims: [8, 8]
-      dropout_rate: 0.1
-
+  bert_encoder:
+    input_dim: 1536
+    hidden_dims: [512, 256]
+    dropout_rate: 0.4
+    sequence_prenet_cfg:
+      input_dim: 1536
+      dropout_rate: 0.3
+      num_attention_heads: 8
+      num_self_attention_blocks: 2
+      lstm_hidden_dim: 768
+  word_count_encoder:
+    input_dim: 7000
+    hidden_dims: [512, 256]
+    dropout_rate: 0.4
+    sequence_prenet_cfg:
+  pos_count_encoder:
+    input_dim: 10
+    hidden_dims: [8, 4]
+    dropout_rate: 0.4
+    kan_grid_size: 5
+    kan_spline_order: 3
+  cat_features_encoders:
+    Meal type:
+      input_dim: 7
+      hidden_dim: 3
+    Service:
+      input_dim: 5
+      hidden_dim: 2
+    Price per person:
+      input_dim: 7
+      hidden_dim: 3
+  supported_trace_features: [trace_cs_3_ss_1]
+  num_features_encoder:
+    input_dim: 10
+    hidden_dims: [8, 4]
+    dropout_rate: 0.4
+    kan_grid_size: 5
+    kan_spline_order: 3
   post_net:
-    input_dim: 224
-    hidden_dims: [128, 64]
-    dropout_rate: 0.1
+    input_dim: 520
+    hidden_dims: [128]
+    dropout_rate: 0.4
+    kan_grid_size: 5
+    kan_spline_order: 3

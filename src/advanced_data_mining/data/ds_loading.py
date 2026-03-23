@@ -1,213 +1,370 @@
 """Contains definition preprocessed dataset loader."""
+import dataclasses
+import json
 import logging
-import os
-import random
-import re
-import sys
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
+import pathlib
+from typing import Annotated
+from typing import Literal
 
-import lightning as pl  # type: ignore
-import pandas as pd  # type: ignore
+import lightning.pytorch as pl
+import numpy as np
+import pydantic
 import torch
+from pydantic import Field
 
-from advanced_data_mining.utils import misc
+from advanced_data_mining.data.structs import processed_ds
+from advanced_data_mining.data.structs import raw_ds
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-class ProcessedDataset(torch.utils.data.Dataset):
+@dataclasses.dataclass
+class SampleMetadata:
+    """Holds metadata about a processed review sample."""
+    review: raw_ds.Review
+    restaurant_info: raw_ds.Restaurant
+    n_author_reviews_index: int
+    is_translated: bool
+    n_words: int
+    n_sentences: int
+
+
+class ProcessedDatasetConfig(pydantic.BaseModel):
+    """Configuration for the processed dataset loader."""
+
+    use_bert_embeddings: Annotated[Literal['sentence', 'review'] | None, Field(
+        description=('Whether to load all BERT embeddings for each sentence, or to load only the'
+                     'average BERT embedding for the whole review. If None, no BERT embeddings'
+                     'will be loaded.')
+    )] = None
+
+    word_count_vector_type: Annotated[Literal['binary', 'count',
+                                              'tfidf', 'count_normalized'] | None, Field(
+        description=('Type of word count vector to load. Options are:'
+                     'binary - presence/absence of words;'
+                     'count - raw word counts;'
+                     'tfidf - term frequency-inverse document frequency;'
+                     'count_normalized - word counts normalized to [0, 1] scale.')
+    )] = None
+
+    use_top_k_words: Annotated[int | None, Field(
+        description=('If set, only the top K most frequent words will be used as features. If None,'
+                     'all words will be used.')
+    )] = None
+
+    pos_count_vector_type: Annotated[Literal['count', 'count_normalized'] | None, Field(
+        description=('Type of part-of-speech count vector to load. Options are:'
+                     'count - raw counts of each part of speech;'
+                     'count_normalized - counts normalized to [0, 1] scale.)')
+    )] = None
+
+    use_categorized_features: Annotated[list[str] | None, Field(
+        description=('List of categorized features to load. If None, all categorized features will'
+                     'be loaded.')
+    )] = None
+
+    use_trace_features: Annotated[list[tuple[int, int]] | None, Field(
+        description=('List of trace features to load, specified as tuples of'
+                     '(chunk_size, step_size). If None, all trace features will be loaded.')
+    )] = None
+
+    normalize_trace_features: Annotated[bool, Field(
+        description=('Whether to normalize trace features to 0 mean and 1 variance.')
+    )] = False
+
+
+class ProcessedDataset(torch.utils.data.Dataset[dict[str, torch.Tensor]]):
     """Reads and loads preprocessed dataset samples."""
 
-    def __init__(self, ds_path: str, sample_indices: List[int]):
+    def __init__(self,
+                 cfg: ProcessedDatasetConfig,
+                 metadata_handler: processed_ds.ProcessingMetadataPathHandler,
+                 samples: list[processed_ds.ProcessedReview]) -> None:
 
-        self._ds_path = ds_path
+        self._cfg = cfg
+        self._metadata_handler = metadata_handler
+        self._samples = samples
 
-        if not os.path.exists(self._ds_path):
-            _logger().error('Dataset path %s does not exist.', self._ds_path)
-            sys.exit(1)
+        doc_freq_pth = self._metadata_handler.count_vectorizer_path / 'doc_frequency_vector.npy'
+        word_count_scaling_pth = (self._metadata_handler.scaling_metadata_path /
+                                  'count_vectors_scale.pt')
 
-        self._numerical_features = pd.read_pickle(
-            os.path.join(self._ds_path, 'numerical_features.pkl'))
+        self._doc_frequency_vector = torch.from_numpy(np.load(doc_freq_pth)).to(torch.float32)
+        self._word_count_scale = torch.load(word_count_scaling_pth).to(torch.float32)
+        self._pos_count_scale = torch.load(self._metadata_handler.scaling_metadata_path /
+                                           'pos_vectors_scale.pt').to(torch.float32)
 
-        self._preprocessed_ds = pd.read_pickle(
-            os.path.join(self._ds_path, 'preprocessed_dataset.pkl')
-        )
+        with (self._metadata_handler.count_vectorizer_path / 'documents_count').open('r') as f:
+            self._documents_count = int(f.read())
 
-        self._sample_indices = sample_indices
+        self._trace_scaling_params = self._metadata_handler.get_trace_scaling_params()
+
+        self._top_k_indices: torch.Tensor | None = None
+
+        if self._cfg.use_top_k_words is not None:
+            self._top_k_indices = torch.topk(self._doc_frequency_vector,
+                                             self._cfg.use_top_k_words).indices
+            self._doc_frequency_vector = self._doc_frequency_vector[self._top_k_indices]
+            self._word_count_scale = self._word_count_scale[self._top_k_indices]
 
     def __len__(self) -> int:
-        return len(self._sample_indices)
+        return len(self._samples)
 
-    def get_raw_sample(self, idx: int) -> Dict[str, Any]:
+    def get_raw_sample(self, idx: int) -> SampleMetadata:
         """Returns unprocessed data for a given sample."""
 
-        sample_idx = self._sample_indices[idx]
-        return self._preprocessed_ds.iloc[sample_idx]
+        sample = self._samples[idx]
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        with sample.num_features_pth.open('r', encoding='utf-8') as f:
+            num_features = json.load(f)
 
-        sample_idx = self._sample_indices[idx]
-        num_features = self._numerical_features.iloc[sample_idx]
+        return SampleMetadata(
+            review=sample.raw_review,
+            restaurant_info=sample.restaurant_info,
+            n_author_reviews_index=num_features['n_author_reviews_index'],
+            is_translated=num_features['is_translated'],
+            n_sentences=num_features['n_sentences'],
+            n_words=num_features['n_words']
+        )
 
-        restaurant_hash = misc.hash_restaurant_href(num_features['restaurant_href'])
+    def collate_fn(self, batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
+        """Custom collate function to handle variable-length features."""
 
-        bow_bottom_path = os.path.join(self._ds_path,
-                                       'bow_representations_bottom',
-                                       restaurant_hash,
-                                       f'{sample_idx}.pt')
+        collated_batch: dict[str, torch.Tensor] = {}
 
-        bow_top_path = os.path.join(self._ds_path,
-                                    'bow_representations_top',
-                                    restaurant_hash,
-                                    f'{sample_idx}.pt')
+        for feat_name in self._supported_categorized_features() + ['rating', 'is_translated']:
+            collated_batch[feat_name] = torch.stack([sample[feat_name] for sample in batch])
 
-        pos_bow_path = os.path.join(self._ds_path,
-                                    'pos_bow',
-                                    restaurant_hash,
-                                    f'{sample_idx}.pt')
+        for cs, ss in self._supported_trace_features():
+            collated_batch[f'trace_cs_{cs}_ss_{ss}'] = torch.stack(
+                [sample[f'trace_cs_{cs}_ss_{ss}'] for sample in batch]
+            )
 
-        tfidf_bottom_path = os.path.join(self._ds_path,
-                                         'tfidf_representations_bottom',
-                                         restaurant_hash,
-                                         f'{sample_idx}.pt')
+        if self._cfg.word_count_vector_type is not None:
+            collated_batch['word_count_vector'] = torch.stack([sample['word_count_vector']
+                                                               for sample in batch])
 
-        tfidf_top_path = os.path.join(self._ds_path,
-                                      'tfidf_representations_top',
-                                      restaurant_hash,
-                                      f'{sample_idx}.pt')
+        if self._cfg.use_bert_embeddings is not None:
 
-        bow_full_path = os.path.join(self._ds_path,
-                                     'bow_representations_full',
-                                     restaurant_hash,
-                                     f'{sample_idx}.pt')
+            if self._cfg.use_bert_embeddings == 'sentence':
+                collated_batch['bert_embeddings'] = torch.nn.utils.rnn.pad_sequence(
+                    [sample['bert_embeddings'] for sample in batch],
+                    batch_first=True,
+                    padding_value=0.0
+                )
+                collated_batch['n_sentences'] = torch.tensor([sample['n_sentences']
+                                                              for sample in batch])
 
-        tfidf_full_path = os.path.join(self._ds_path,
-                                       'tfidf_representations_full',
-                                       restaurant_hash,
-                                       f'{sample_idx}.pt')
-        sentence_bert_path = os.path.join(self._ds_path,
-                                          'sentence_bert_embeddings',
-                                          restaurant_hash,
-                                          f'{sample_idx}.pt')
+            else:
+                collated_batch['bert_embeddings'] = torch.stack([sample['bert_embeddings']
+                                                                 for sample in batch])
 
-        trace_cols = [col for col in self._numerical_features.columns
-                      if col.startswith('trace_')]
+        if self._cfg.pos_count_vector_type is not None:
+            collated_batch['pos_count_vector'] = torch.stack([sample['pos_count_vector']
+                                                              for sample in batch])
 
-        trace_re = re.compile(r'cl_(\d+)_sz_(\d+)')
+        return collated_batch
 
-        trace_features_specs = set()
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
 
-        for col in trace_cols:
-            match = trace_re.search(col)
-            if match:
-                trace_features_specs.add(match.group(0))
+        sample = self._samples[idx]
 
-        trace_features = {
-            spec: torch.tensor([num_features[f'trace_velocity_{spec}'],
-                                num_features[f'trace_volume_{spec}']], dtype=torch.float32)
-            for spec in trace_features_specs
-        }
+        data: dict[str, torch.Tensor] = {}
+
+        if self._cfg.use_bert_embeddings is not None:
+
+            data['bert_embeddings'] = torch.load(sample.bert_embeddings_pth)
+
+            if self._cfg.use_bert_embeddings == 'review':
+                data['bert_embeddings'] = data['bert_embeddings'].mean(dim=0)
+
+            else:
+                data['n_sentences'] = torch.tensor(data['bert_embeddings'].size(0))
+
+        data.update(self._load_word_count_features(sample))
+
+        if self._cfg.pos_count_vector_type is not None:
+            data['pos_count_vector'] = torch.load(sample.pos_count_vector_pth).to(torch.float32)
+
+            if self._cfg.pos_count_vector_type == 'count_normalized':
+                data['pos_count_vector'] = torch.clip(data['pos_count_vector'] /
+                                                      self._pos_count_scale, 0, 1)
+
+        supported_cat_features = self._supported_categorized_features()
+
+        with sample.num_features_pth.open('r', encoding='utf-8') as f:
+            num_features = json.load(f)
+
+            data['rating'] = torch.tensor(num_features['rating'])
+            data['is_translated'] = torch.tensor(num_features['is_translated'], dtype=torch.bool)
+            cat_features = num_features['encoded_cat_options']
+
+        for cat_feature_name in supported_cat_features:
+            data[cat_feature_name] = torch.tensor(cat_features[cat_feature_name])
+
+        data.update(self._load_trace_features(sample))
+
+        return data
+
+    def _supported_trace_features(self) -> list[tuple[int, int]]:
+        """Returns the list of supported trace features (chunk_size, step_size)."""
+
+        with self._metadata_handler.numerical_features_cfg_path.open('r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        all_features = [tuple(chunk_setup) for chunk_setup in cfg['chunk_and_step_sizes']]
+
+        if self._cfg.use_trace_features is not None:
+            return [feat for feat in all_features if feat in self._cfg.use_trace_features]
+
+        return all_features
+
+    def _supported_categorized_features(self) -> list[str]:
+        """Returns the list of supported categorized features."""
+
+        with self._metadata_handler.numerical_features_cfg_path.open('r', encoding='utf-8') as f:
+            cfg = json.load(f)
+
+        all_features = [option_setup['name'] for option_setup in
+                        cfg['categorized_options_used']]
+
+        if self._cfg.use_categorized_features is not None:
+            return [feat for feat in all_features if feat in self._cfg.use_categorized_features]
+
+        return all_features
+
+    def _load_trace_features(self, sample: processed_ds.ProcessedReview) -> dict[str, torch.Tensor]:
+        """Loads trace features for a given review."""
+
+        data: dict[str, torch.Tensor] = {}
+
+        supported_features = self._supported_trace_features()
+
+        with sample.trace_features_pth.open('r', encoding='utf-8') as f:
+            trace_features = json.load(f)
+
+        for trace_feature_spec in trace_features:
+
+            chunk_size = trace_feature_spec['chunk_length']
+            step_size = trace_feature_spec['step_size']
+
+            if (chunk_size, step_size) not in supported_features:
+                continue
+
+            feature_tensor = torch.tensor([trace_feature_spec['trace_velocity'],
+                                           trace_feature_spec['trace_volume']])
+
+            if self._cfg.normalize_trace_features:
+                mean, std = self._trace_scaling_params[(chunk_size, step_size)]
+                feature_tensor = (feature_tensor - mean) / std
+
+            data[f'trace_cs_{chunk_size}_ss_{step_size}'] = feature_tensor
+
+        return data
+
+    def _load_word_count_features(self,
+                                  sample: processed_ds.ProcessedReview) -> dict[str, torch.Tensor]:
+        """Loads word count vector features for a given sample."""
+
+        if self._cfg.word_count_vector_type is None:
+            return {}
+
+        word_count_vector = torch.load(sample.word_count_vector_pth).to_dense().to(torch.float32)
+
+        if self._top_k_indices is not None:
+            word_count_vector = word_count_vector[self._top_k_indices]
+
+        if self._cfg.word_count_vector_type == 'count_normalized':
+            word_count_vector = torch.clip(word_count_vector / self._word_count_scale, 0, 1)
+
+        if self._cfg.word_count_vector_type == 'tfidf':
+            tf = word_count_vector / (word_count_vector.sum() + 1e-8)
+            idf = torch.log((1 + self._documents_count) /
+                            (1 + self._doc_frequency_vector)) + 1.0
+
+            word_count_vector = tf * idf
 
         return {
-            'bow_bottom': torch.load(bow_bottom_path).to_dense(),
-            'bow_top': torch.load(bow_top_path).to_dense(),
-            'pos_bow': torch.load(pos_bow_path).to_dense().to(torch.float32),
-            'tfidf_bottom': torch.load(tfidf_bottom_path).to_dense(),
-            'tfidf_top': torch.load(tfidf_top_path).to_dense(),
-            'bow_full': torch.load(bow_full_path).to_dense(),
-            'tfidf_full': torch.load(tfidf_full_path).to_dense(),
-            'sentence_bert': torch.load(sentence_bert_path).to(torch.float32),
-            'is_from_cracow': torch.tensor(num_features['is_from_cracow'],
-                                           dtype=torch.float32).unsqueeze(-1),
-            'num_words': torch.tensor(num_features['num_words'],
-                                      dtype=torch.float32).unsqueeze(-1),
-            'num_sentences': torch.tensor(num_features['num_sentences'],
-                                          dtype=torch.float32).unsqueeze(-1),
-            'review_rating': torch.tensor(num_features['review_rating'],
-                                          dtype=torch.float32),
-            **trace_features
+            'word_count_vector': word_count_vector
         }
 
 
 class ProcessedDataModule(pl.LightningDataModule):
-    """Lightning data module for the processed dataset."""
+    """LightningDataModule for the processed dataset."""
 
     def __init__(self,
-                 ds_path: str,
+                 ds_cfg: ProcessedDatasetConfig,
+                 ds_path: pathlib.Path,
+                 metadata_path: pathlib.Path,
                  batch_size: int,
                  n_workers: int,
-                 n_test_samples: int,
                  train_val_split: float):
         super().__init__()
-        self._ds_path = ds_path
+
+        self._ds_path_handler = processed_ds.ProcessedDsPathHandler(ds_path)
+        self._metadata_handler = processed_ds.ProcessingMetadataPathHandler(metadata_path)
+        self._ds_cfg = ds_cfg
         self._batch_size = batch_size
-        self._n_test_samples = n_test_samples
-        self._train_val_split = train_val_split
         self._n_workers = n_workers
+        self._train_val_split = train_val_split
 
-        self._train_ds: Optional[ProcessedDataset] = None
-        self._val_ds: Optional[ProcessedDataset] = None
-        self._test_ds: Optional[ProcessedDataset] = None
+        self._train_dataset: ProcessedDataset | None = None
+        self._val_dataset: ProcessedDataset | None = None
+        self._test_dataset: ProcessedDataset | None = None
 
-    def setup(self, stage: str):  # pylint: disable=unused-argument
-        """Sets up the datasets for training, validation and testing."""
+    def setup(self, stage: str | None = None) -> None:
+        """Initializes datasets for the specified stage (fit or test)."""
 
-        preprocessed_ds = pd.read_pickle(
-            os.path.join(self._ds_path, 'preprocessed_dataset.pkl')
-        )
+        all_samples = list(self._ds_path_handler.iter_all_reviews())
 
-        all_indices = preprocessed_ds.index.tolist()
+        if stage in (None, 'fit'):
+            split_idx = int(len(all_samples) * self._train_val_split)
+            train_samples = all_samples[:split_idx]
+            val_samples = all_samples[split_idx:]
 
-        random.shuffle(all_indices)
+            self._train_dataset = ProcessedDataset(self._ds_cfg,
+                                                   self._metadata_handler,
+                                                   train_samples)
+            self._val_dataset = ProcessedDataset(self._ds_cfg,
+                                                 self._metadata_handler,
+                                                 val_samples)
 
-        test_indices = all_indices[-self._n_test_samples:]
-        train_val_indices = all_indices[:-self._n_test_samples]
+        if stage in (None, 'test'):
+            self._test_dataset = ProcessedDataset(self._ds_cfg,
+                                                  self._metadata_handler,
+                                                  all_samples)
 
-        n_train = int(len(train_val_indices) * self._train_val_split)
-        train_indices = train_val_indices[:n_train]
-        val_indices = train_val_indices[n_train:]
+    def train_dataloader(self) -> torch.utils.data.DataLoader[dict[str, torch.Tensor]]:
+        """Returns DataLoader for the training set."""
 
-        self._train_ds = ProcessedDataset(ds_path=self._ds_path,
-                                          sample_indices=train_indices)
-        self._val_ds = ProcessedDataset(ds_path=self._ds_path,
-                                        sample_indices=val_indices)
-        self._test_ds = ProcessedDataset(ds_path=self._ds_path,
-                                         sample_indices=test_indices)
+        assert self._train_dataset is not None, 'Train dataset not initialized'
 
-    def train_dataloader(self):
-        """Returns the training data loader."""
-
-        assert self._train_ds is not None, 'The training dataset has not been set up yet.'
-
-        return torch.utils.data.DataLoader(self._train_ds,
+        return torch.utils.data.DataLoader(self._train_dataset,
                                            batch_size=self._batch_size,
                                            num_workers=self._n_workers,
-                                           pin_memory=True,
-                                           shuffle=True)
+                                           shuffle=True,
+                                           collate_fn=self._train_dataset.collate_fn)
 
-    def val_dataloader(self):
-        """Returns the validation data loader."""
+    def val_dataloader(self) -> torch.utils.data.DataLoader[dict[str, torch.Tensor]]:
+        """Returns DataLoader for the validation set."""
 
-        assert self._val_ds is not None, 'The validation dataset has not been set up yet.'
+        assert self._val_dataset is not None, 'Validation dataset not initialized'
 
-        return torch.utils.data.DataLoader(self._val_ds,
+        return torch.utils.data.DataLoader(self._val_dataset,
                                            batch_size=self._batch_size,
                                            num_workers=self._n_workers,
-                                           pin_memory=True,
-                                           shuffle=False)
+                                           shuffle=False,
+                                           collate_fn=self._val_dataset.collate_fn)
 
-    def test_dataloader(self):
-        """Returns the test data loader."""
+    def test_dataloader(self) -> torch.utils.data.DataLoader[dict[str, torch.Tensor]]:
+        """Returns DataLoader for the test set."""
 
-        assert self._test_ds is not None, 'The test dataset has not been set up yet.'
+        assert self._test_dataset is not None, 'Test dataset not initialized'
 
-        return torch.utils.data.DataLoader(self._test_ds,
+        return torch.utils.data.DataLoader(self._test_dataset,
                                            batch_size=self._batch_size,
                                            num_workers=self._n_workers,
-                                           pin_memory=True,
-                                           shuffle=False)
+                                           shuffle=False,
+                                           collate_fn=self._test_dataset.collate_fn)

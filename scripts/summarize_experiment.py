@@ -1,59 +1,23 @@
 """Runs testing on models corresponding to a given experiment and composes stats summary."""
-import itertools
-import json
 import logging
-import os
-from typing import Any
-from typing import Dict
-from typing import List
+import pathlib
 
 import hydra
-import lightning.pytorch as pl
+import mlflow
 import omegaconf
-import torch
 
-from advanced_data_mining.data import ds_loading
-from advanced_data_mining.data import experiments_summary
-from advanced_data_mining.model import rating_predictor
+from advanced_data_mining.experiments import best_runs_summarizer
+from advanced_data_mining.experiments import experiment_summarizer
+from advanced_data_mining.experiments import utils as experiment_utils
 from advanced_data_mining.utils import logging_utils
-from advanced_data_mining.utils import misc as misc_utils
 
 
-def _logger():
+def _logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-def _save_example_outputs(run: misc_utils.MLRun,
-                          data_module: ds_loading.ProcessedDataModule,
-                          output_path: str):
-
-    checkpoint_path = experiments_summary.get_best_checkpoint_path(run)
-    model = rating_predictor.RatingPredictor.load_from_checkpoint(checkpoint_path,  # pylint: disable=no-value-for-parameter
-                                                                  map_location=torch.device('cpu'))
-    model.eval()
-
-    test_loader = data_module.test_dataloader()
-
-    examples: List[Dict[str, Any]] = []
-
-    for i, inputs in enumerate(itertools.islice(test_loader, 30)):
-
-        raw_sample = test_loader.dataset.get_raw_sample(i)
-
-        with torch.no_grad():
-            cl_output, _ = model.sanitize_outputs(*model(inputs))
-
-        examples.append({
-            'original_info': raw_sample.to_dict(),
-            'predicted_rating': int(cl_output[0].item()) + 1
-        })
-
-    with open(output_path, 'w', encoding='utf-8') as output_json_f:
-        json.dump(examples, output_json_f, indent=4, ensure_ascii=False)
-
-
 @hydra.main(version_base=None, config_path='cfg', config_name='summarize_experiment')
-def main(cfg: omegaconf.DictConfig):
+def main(cfg: omegaconf.DictConfig) -> None:
     """Runs testing and summarizes results for a given experiment."""
 
     logging_utils.setup_logging('summarize_experiment')
@@ -61,78 +25,53 @@ def main(cfg: omegaconf.DictConfig):
     _logger().info('Running experiment summarization with configuration:\n%s',
                    omegaconf.OmegaConf.to_yaml(cfg))
 
-    os.makedirs(cfg.output_path, exist_ok=True)
+    output_dir = pathlib.Path(cfg.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    mlflow_runs = misc_utils.get_mlruns(cfg.experiment_name)
+    mlflow_client = mlflow.tracking.MlflowClient(cfg.mlflow_server_uri)
 
-    for x_metric, y_metric in cfg.metrics_for_plot_axes:
-        fig = experiments_summary.plot_metric_pair(
-            mlflow_runs=mlflow_runs,
-            x_metric=x_metric,
-            y_metric=y_metric
+    global_summarizer_config = {
+        'draw_n_best_curves': cfg.draw_n_best_curves,
+        'draw_n_worst_curves': cfg.draw_n_worst_curves,
+        'take_metrics': omegaconf.OmegaConf.to_container(cfg.take_metrics),
+    }
+
+    take_best_runs_by = [
+        experiment_utils.MetricConfig.model_validate(metric)
+        for metric in omegaconf.OmegaConf.to_container(cfg.take_best_runs_by)  # type: ignore
+    ]
+    global_best_runs_by_metric: dict[str, list[str]] = {
+        metric.name: [] for metric in take_best_runs_by
+    }
+
+    for summarizer_cfg in cfg.experiment_summarizers:
+        _logger().info('Processing summarizer for experiment: %s',
+                       summarizer_cfg.experiment_name)
+
+        summarizer_config = experiment_summarizer.ExperimentSummarizerConfig.model_validate(
+            {
+                **global_summarizer_config,
+                **omegaconf.OmegaConf.to_container(summarizer_cfg),  # type: ignore
+            }
         )
 
-        plot_path = os.path.join(
-            cfg.output_path,
-            f'scatter_{x_metric}_vs_{y_metric}.svg'
-        )
+        summarizer = experiment_summarizer.ExperimentSummarizer(summarizer_config, mlflow_client)
+        summarizer.summarize(output_dir / summarizer_cfg.experiment_name)
 
-        fig.savefig(plot_path)
+        for metric, run_id in summarizer.get_best_runs(take_best_runs_by).items():
+            global_best_runs_by_metric[metric].append(run_id)
 
-        _logger().info('Saved scatter plot of %s vs %s to %s',
-                       y_metric, x_metric, plot_path)
+        _logger().info('Completed summarization for experiment: %s',
+                       summarizer_cfg.experiment_name)
 
-    for table in cfg.summary_tables:
-        summary_table = experiments_summary.compose_summary_table(
-            mlflow_runs=mlflow_runs,
-            metrics=table.metrics,
-            sort_by=table.sort_by
-        )
-
-        summary_path = os.path.join(
-            cfg.output_path,
-            f'summary_table_{table.name}.md'
-        )
-        with open(summary_path, 'w', encoding='utf-8') as f:
-            f.write(summary_table)
-
-        _logger().info('Saved summary table to %s', summary_path)
-
-    _logger().info('Generating summary figures...')
-
-    for fig_name, fig in experiments_summary.get_summary_figures(mlflow_runs).items():
-        fig_path = os.path.join(cfg.output_path, 'summary_figures', f'{fig_name}.svg')
-        os.makedirs(os.path.dirname(fig_path), exist_ok=True)
-        fig.savefig(fig_path)
-
-    pl.seed_everything(cfg.data_cfg.seed)
-
-    data_module = ds_loading.ProcessedDataModule(
-        ds_path=cfg.data_cfg.processed_ds_path,
-        batch_size=1,
-        n_workers=1,
-        n_test_samples=cfg.data_cfg.n_test_samples,
-        train_val_split=cfg.data_cfg.train_val_split
+    global_summarizer = best_runs_summarizer.BestRunsSummarizer(
+        mlflow_client,
+        list(cfg.plot_best_runs_wrt_parameters)
     )
-
-    data_module.setup('test')
-
-    for metric in cfg.examples_cfg.choose_by_metrics:
-
-        _logger().info('Saving example outputs for metric %s', metric)
-
-        best_run, worst_run = experiments_summary.get_best_and_worst_runs(mlflow_runs, metric)
-
-        examples_dir = os.path.join(cfg.output_path, 'examples', metric)
-        os.makedirs(examples_dir, exist_ok=True)
-
-        _save_example_outputs(best_run,
-                              data_module,
-                              os.path.join(examples_dir, 'best_run.json'))
-
-        _save_example_outputs(worst_run,
-                              data_module,
-                              os.path.join(examples_dir, 'worst_run.json'))
+    global_summarizer.summarize(
+        best_runs_by_metric=global_best_runs_by_metric,
+        output_path=output_dir / 'global_summary',
+    )
 
 
 if __name__ == '__main__':

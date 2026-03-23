@@ -1,0 +1,5 @@
+outs:
+- md5: 8703b580f3ee0f5135179edd10874a3d
+  size: 4114251570
+  hash: md5
+  path: processed_reviews_poland.tar.bz2

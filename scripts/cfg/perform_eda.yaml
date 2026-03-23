@@ -1,3 +1,3 @@
 ---
-processed_ds_dir: tmp/processed_ds
-output_dir: tmp/eda
+raw_ds_path: data/raw_reviews_poland
+output_dir: tmp/raw_eda

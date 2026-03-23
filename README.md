@@ -1,14 +1,14 @@
 # advanced-data-mining-project
 
-The project provides tools for scraping restaurant textual reviews, which can be subsequently analysed using either traditional or advanced NLP approaches in order to get insight into relationship between written-form review and actual rating, helpfulness etc.
+The project provides tools for scraping restaurant textual reviews, which are subsequently analysed using either traditional or advanced NLP approaches in order to get insight into relationship between written-form review and actual rating, helpfulness etc.
 
-We recommend you to check out the **paper** describing the theory, methods and experiments related to the project. You can find it in the `doc` directory.
+We recommend you to check out the [page](https://wiktorprosowicz.github.io/advanced-data-mining-project/) describing the conducted experiments. 
 
 ## Project structure
 
 ```yaml
 - .devcontainer   # Devcontainer setup.
-- doc/            # Documentation, experiments description.         
+- doc/            # Documentation, experiments description.
 - scripts/        # Contains scripts for running scraping process, EDA etc.
 - src/            # Source code.
 - justfile        # Contains setup recipes, check out for installing deps etc.
@@ -17,7 +17,7 @@ We recommend you to check out the **paper** describing the theory, methods and e
 
 ## Usage
 
-The project's public API, available for the user, can be found in the `scripts` directory. It contains scripts for running data scraping & processing pipelines, models training and obtaining visualizations and summaries. 
+The project's public API, available for the user, can be found in the `scripts` directory. It contains scripts for running data scraping & processing pipelines, models training and obtaining visualizations and summaries.
 
 ```
 just setup_env
@@ -32,6 +32,10 @@ The recommended workflow of using the project assumes the following order of run
 - **perform_eda** - collect and visualize statistics describing the processed data
 - **train_model** - train a neural network that predicts the review sentiment
 - **summarize_experiment** - if multiple models are trained, use this script to compose stats and visualizations based on the test results
+
+### Development
+
+In `Contribution.md`, there's a list of best practices a developer of this repository should follow.
 
 ## Changelog
 
