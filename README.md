@@ -1,8 +1,8 @@
 # advanced-data-mining-project
 
-The project provides tools for scraping restaurant textual reviews, which can be subsequently analysed using either traditional or advanced NLP approaches in order to get insight into relationship between written-form review and actual rating, helpfulness etc.
+The project provides tools for scraping restaurant textual reviews, which are subsequently analysed using either traditional or advanced NLP approaches in order to get insight into relationship between written-form review and actual rating, helpfulness etc.
 
-We recommend you to check out the **paper** describing the theory, methods and experiments related to the project. You can find it in the `doc` directory.
+We recommend you to check out the [page](https://wiktorprosowicz.github.io/advanced-data-mining-project/) describing the conducted experiments. 
 
 ## Project structure
 
