@@ -15,8 +15,8 @@ from playwright.async_api import ProxySettings as AsyncProxySettings
 from playwright.sync_api import ProxySettings as SyncProxySettings
 from playwright.sync_api import sync_playwright
 
-from advanced_data_mining.data import raw_ds
 from advanced_data_mining.data.scraping import maps_browser
+from advanced_data_mining.data.structs import raw_ds
 from advanced_data_mining.utils import logging_utils
 from advanced_data_mining.utils import misc as misc_utils
 

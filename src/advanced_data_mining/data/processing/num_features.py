@@ -9,8 +9,6 @@ import numpy as np
 import pydantic
 import torch
 
-from advanced_data_mining.data.structs import processed_ds
-
 
 def num_words(text: str) -> int:
     """Returns the number of words in the given text."""

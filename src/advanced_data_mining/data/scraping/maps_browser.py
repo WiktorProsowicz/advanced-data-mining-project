@@ -6,10 +6,10 @@ from typing import List
 from playwright.async_api import Page as AsyncPage
 from playwright.sync_api import Page as SyncPage
 
-from advanced_data_mining.data.raw_ds import Restaurant
-from advanced_data_mining.data.raw_ds import Review
 from advanced_data_mining.data.scraping import restaurants_extractor
 from advanced_data_mining.data.scraping import reviews_extractor
+from advanced_data_mining.data.structs.raw_ds import Restaurant
+from advanced_data_mining.data.structs.raw_ds import Review
 
 
 def _logger() -> logging.Logger:

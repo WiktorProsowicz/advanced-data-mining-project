@@ -1,9 +1,5 @@
 """Contains miscellaneous utility functions."""
-import dataclasses
 import hashlib
-from typing import List
-
-import mlflow
 
 
 def hash_restaurant_href(restaurant_href: str) -> str:

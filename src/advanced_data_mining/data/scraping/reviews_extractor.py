@@ -2,7 +2,6 @@
 import logging
 import re
 import unicodedata
-from dataclasses import dataclass
 from typing import AsyncIterator
 from typing import Dict
 from typing import Optional
@@ -11,8 +10,8 @@ from typing import Tuple
 from playwright.async_api import Locator
 from playwright.async_api import Page
 
-from advanced_data_mining.data.raw_ds import Author
-from advanced_data_mining.data.raw_ds import Review
+from advanced_data_mining.data.structs.raw_ds import Author
+from advanced_data_mining.data.structs.raw_ds import Review
 
 
 def _logger() -> logging.Logger:
