@@ -1,19 +1,19 @@
 """Module that processes raw dataset into a structured processed dataset."""
-
 import json
 import logging
 import pathlib
-import tqdm
 
 import torch
-from sklearn.preprocessing import MaxAbsScaler, StandardScaler
+import tqdm
+from sklearn.preprocessing import MaxAbsScaler
+from sklearn.preprocessing import StandardScaler
 
 from advanced_data_mining.data.processing import count_vectorizer
 from advanced_data_mining.data.processing import embeddings as embeddings_processing
 from advanced_data_mining.data.processing import num_features
 from advanced_data_mining.data.processing import utils as processing_utils
-from advanced_data_mining.data.structs import raw_ds as raw_ds_structs
 from advanced_data_mining.data.structs import processed_ds as processed_ds_structs
+from advanced_data_mining.data.structs import raw_ds as raw_ds_structs
 
 
 def _logger() -> logging.Logger:

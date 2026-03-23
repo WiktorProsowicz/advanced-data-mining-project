@@ -1,15 +1,18 @@
 """Module that extracts reviews from Google Maps page corresponding to specific restaurant."""
-
 import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import AsyncIterator, Dict, Optional, Tuple
+from typing import AsyncIterator
+from typing import Dict
+from typing import Optional
+from typing import Tuple
 
 from playwright.async_api import Locator
 from playwright.async_api import Page
 
-from advanced_data_mining.data.raw_ds import Review, Author
+from advanced_data_mining.data.raw_ds import Author
+from advanced_data_mining.data.raw_ds import Review
 
 
 def _logger() -> logging.Logger:
@@ -129,7 +132,7 @@ class ReviewsExtractor:
 
         if await more_reviews_btn.count() == 0:
             _logger().debug('Couldn\'t locate the "More reviews" button!')
-        
+
         else:
             try:
                 await more_reviews_btn.first.click(timeout=4000)

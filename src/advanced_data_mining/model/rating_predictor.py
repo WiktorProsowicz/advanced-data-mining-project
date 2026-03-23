@@ -1,19 +1,20 @@
 """Contains definition of Rating Predictor model."""
-from typing import Dict
-from typing import Tuple
-from typing import Annotated
-from typing import Literal
 import itertools
+from typing import Annotated
+from typing import Dict
+from typing import Literal
+from typing import Tuple
 
-from pydantic import Field
 import lightning as pl
+import pydantic
 import torch
 import torchmetrics
-import pydantic
+from pydantic import Field
 
+from advanced_data_mining.model.modules import CatFeatureEncoder
 from advanced_data_mining.model.modules import LinguisticEncoder
 from advanced_data_mining.model.modules import NumFeaturesEncoder
-from advanced_data_mining.model.modules import PostNet, CatFeatureEncoder
+from advanced_data_mining.model.modules import PostNet
 
 
 class OptimizerConfiguration(pydantic.BaseModel):

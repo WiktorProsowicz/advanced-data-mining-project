@@ -8,7 +8,7 @@ model_testers_cfgs:
   - run_id: 1af2ea882bb44b6e9e8830e9e6b28c80
     checkpoint_name: epoch=14-step=7500.ckpt
     output_path: tmp/model_testing/finding_best_base_model
-  
+
   - run_id: 08298951f3134780b5fe0000378b9132
     checkpoint_name: epoch=14-step=7500.ckpt
     output_path: tmp/model_testing/ablation_no_numerical_features

@@ -35,7 +35,7 @@ The recommended workflow of using the project assumes the following order of run
 
 ### Development
 
-In `Contribution.md`, there's a list of best practices a developer of this repository should follow. 
+In `Contribution.md`, there's a list of best practices a developer of this repository should follow.
 
 ## Changelog
 

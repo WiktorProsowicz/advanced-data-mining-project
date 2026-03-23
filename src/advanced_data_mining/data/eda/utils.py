@@ -1,5 +1,4 @@
 """Utilities for performing EDA or processed ds analysis."""
-
 from typing import Any
 
 import pandas as pd
@@ -20,9 +19,9 @@ def is_outlier(series: pd.Series) -> pd.Series:
 
 
 DARK_COLOR_STD = '#24403e'
-LIGHT_COLOR_STD = "#67e0da"
-MIDDLE_COLOR_STD = "#4A8F8E"
-COOL_COLOR_STD = "#67c2c7"
+LIGHT_COLOR_STD = '#67e0da'
+MIDDLE_COLOR_STD = '#4A8F8E'
+COOL_COLOR_STD = '#67c2c7'
 WARM_COLOR_STD = '#d96891'
 NEUTRAL_COLOR_STD = '#bbbbbb'
 

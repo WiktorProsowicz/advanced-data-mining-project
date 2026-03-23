@@ -1,16 +1,17 @@
 """Prepares test dataset using the metadata generated for training set."""
-
+import json
 import logging
 import pathlib
-import json
 
 import hydra
 import omegaconf
 
-from advanced_data_mining.utils import logging_utils
 from advanced_data_mining.data import processor
+from advanced_data_mining.data.processing import count_vectorizer
+from advanced_data_mining.data.processing import embeddings
+from advanced_data_mining.data.processing import num_features
 from advanced_data_mining.data.structs import raw_ds
-from advanced_data_mining.data.processing import count_vectorizer, num_features, embeddings
+from advanced_data_mining.utils import logging_utils
 
 
 def _logger() -> logging.Logger:

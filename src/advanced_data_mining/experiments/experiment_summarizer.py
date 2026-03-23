@@ -80,7 +80,7 @@ class ExperimentSummarizer:
                 _logger().warning('Metric %s not found in runs', metric_cfg.name)
                 continue
 
-            sorted_df = df.sort_values(by=metric_cfg.name, ascending=metric_cfg.mode == "min")
+            sorted_df = df.sort_values(by=metric_cfg.name, ascending=metric_cfg.mode == 'min')
 
             self._plot_best_and_worst_curves(
                 sorted_df=sorted_df,

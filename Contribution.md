@@ -7,7 +7,7 @@ This repository contains code used to scrape and preprocess textual data, train 
 
 ## Repository Structure
 
-- `scripts/`: Entrypoints used directly to perform elements of the scraping/processing/training/evaluation pipeline 
+- `scripts/`: Entrypoints used directly to perform elements of the scraping/processing/training/evaluation pipeline
     - `cfg/`: Hydra configuration files used by the scripts
 - `src/`: Source code
     - `data/`: Resources related to data-related operations

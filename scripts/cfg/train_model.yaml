@@ -5,7 +5,7 @@ run_cfg:
   mlflow_run: sample_run
   seed: 2137
   max_epochs: 30
-  swa: null
+  swa:
   early_stopping_patience: 3
   ds_path: data/processed_reviews_poland
   ds_metadata_path: data/processing_metadata_poland
@@ -32,7 +32,7 @@ train_cfg:
   classification_classes_weights: [0.09, 0.28, 0.33, 0.28, 0.03]
   label_smoothing_eps: 0.05
   use_classification_loss: false
-  translation_cl_loss_weight: null
+  translation_cl_loss_weight:
   gradient_clip_val: 0.5
   gradient_clip_mode: norm
 
@@ -56,7 +56,7 @@ model_cfg:
     input_dim: 7000
     hidden_dims: [512, 256]
     dropout_rate: 0.4
-    sequence_prenet_cfg: null
+    sequence_prenet_cfg:
   pos_count_encoder:
     input_dim: 10
     hidden_dims: [8, 4]
@@ -64,13 +64,13 @@ model_cfg:
     kan_grid_size: 5
     kan_spline_order: 3
   cat_features_encoders:
-    "Meal type":
+    Meal type:
       input_dim: 7
       hidden_dim: 3
-    "Service":
+    Service:
       input_dim: 5
       hidden_dim: 2
-    "Price per person":
+    Price per person:
       input_dim: 7
       hidden_dim: 3
   supported_trace_features: [trace_cs_3_ss_1]

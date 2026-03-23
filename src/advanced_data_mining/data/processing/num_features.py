@@ -1,13 +1,12 @@
 """Utilities for extracting numerical features from text data."""
-
+import json
 import logging
 import pathlib
-import json
 from typing import Any
 
-import pydantic
 import nltk
 import numpy as np
+import pydantic
 import torch
 
 from advanced_data_mining.data.structs import processed_ds
@@ -124,10 +123,10 @@ class NumericalFeaturesExtractor:
             trace_volume = self._calc_trace_volume(chunks)
 
             features.append({
-                "chunk_length": chunk_length,
-                "step_size": step_size,
-                "trace_velocity": trace_velocity,
-                "trace_volume": trace_volume
+                'chunk_length': chunk_length,
+                'step_size': step_size,
+                'trace_velocity': trace_velocity,
+                'trace_volume': trace_volume
             })
 
         return features

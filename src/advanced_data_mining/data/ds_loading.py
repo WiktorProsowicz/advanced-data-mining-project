@@ -1,17 +1,19 @@
 """Contains definition preprocessed dataset loader."""
+import dataclasses
 import json
 import logging
-from typing import Literal, Annotated
-import dataclasses
 import pathlib
+from typing import Annotated
+from typing import Literal
 
-import pydantic
-from pydantic import Field
-import torch
-import numpy as np
 import lightning.pytorch as pl
+import numpy as np
+import pydantic
+import torch
+from pydantic import Field
 
-from advanced_data_mining.data.structs import raw_ds, processed_ds
+from advanced_data_mining.data.structs import processed_ds
+from advanced_data_mining.data.structs import raw_ds
 
 
 def _logger() -> logging.Logger:

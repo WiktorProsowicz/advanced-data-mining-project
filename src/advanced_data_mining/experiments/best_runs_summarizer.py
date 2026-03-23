@@ -1,6 +1,6 @@
 """Utilities for summarizing globally selected best MLflow runs."""
-from pathlib import Path
 import logging
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import mlflow

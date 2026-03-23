@@ -1,8 +1,8 @@
 """Contains layers and modules for building models."""
 from typing import List
 
-import torch
 import pydantic
+import torch
 
 from advanced_data_mining.model import torchkan
 
