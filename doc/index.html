@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Advanced Data Mining Project</title>
+        <meta name="description"
+            content="This page describes a project that includes textual data mining, processing and training classification models." />
+        <meta name="author" content="Wiktor Prosowicz" />
+        <link rel="stylesheet" href="bootstrap.min.css"></link>
+
+        <style>
+            body {
+            font-family: 'Monaco', monospace;
+            /* width: 800px;
+            margin: auto; */
+            }
+
+            section {
+            margin-bottom: 50px;
+
+            }
+
+            figure {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="container">
+
+            <header class="p-2 d-flex mb-5 flex-column align-items-center justify-content-center">
+                <h1 class="text-center border-top border-bottom p-3">Advanced Data Mining Project - data scraping, analysis and processing; models'
+                    training and evaluation</h1>
+
+                <div class="p-2 text-left mt-2">
+
+                    <p>On this page, I present my analysis of textual reviews of kebab restaurants, scraped from Google Maps.
+                        I aimed to perform thorough experiments involving setting up the scraping pipeline, preprocessing the
+                        data, extracting useful numerical representations and training neural network-based models to recognize
+                        the sentiment of the reviews. Each review was converted into a set of linguistic representations, from
+                        classical ones (e.g. TF-IDF) to modern Transformer-based embeddings, and numerical features. I
+                        subsequently trained multiple configurations of neural network-based models to predict review rating
+                        on scale 1 to 5. Obtaining the results allowed me to gain meaningful insight into the data and draw
+                        conclusions on the applicability of different NLP techniques for sentiment analysis.</p>
+
+                    <p>This project involves a systematic approach to ML engineering and includes concepts such as data versioning,
+                        experiment tracking, slice-based evaluation and thoughtful hyperparameter tuning.
+                    </p>
+                </div>
+
+                <div class="mt-3 d-flex align-items-center gap-5">
+                    <div class="d-flex flex-column align-items-center justify-content-center">
+                        <span class="font-weight-bold">Wiktor Prosowicz</span>
+                        <span class="text-secondary"> AGH University of Krakow </span>
+                        <span class="font-weight-light">wprosowicz@student.agh.edu.pl</span>
+                    </div>
+
+                    <a href="https://github.com/WiktorProsowicz/advanced-data-mining-project" target="_blank" class="btn btn-primary ml-3">Code</a>
+                </div>
+            </header>
+
+            <section class="d-flex flex-column gap-4">
+
+                <h2>1. Data scraping &amp; EDA</h2>
+
+                <p>In order to scrape the Google Maps reviews from a chosen set of restaurants, we need an automated pipeline that is able to interact
+                    with the service in a similar way a human would. This is crucial since only this way we can leverage the internal Google’s
+                    algorithms for restaurant lookup, as well as loading, sorting, and automated translation of the reviews. To this end, we
+                    incorporated Microsoft’s package <a href="https://playwright.dev/" target="_blank">Playwright</a>, which allows us to
+                    automatically interact with a browser engine.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+                    <img src="img/example-raw-reviews.png" class="figure-img img-fluid rounded" />
+                    <figcaption class="figure-caption">A screenshot of raw reviews scraped for an example location. The algorithm first found the
+                        restaurant for a given location specification and scraped up to a certain threshold of reviews. For each review, the algorithm
+                        extracted the information about the author (specifically, the total number of reviews they have written), the reviews' content
+                        (possibly including the original language), the rating on the scale 1 to 5 and an optional list of pre-defined options, such
+                        as the specification of the meal type.</figcaption>
+                </figure>
+
+
+                <p>The EDA involved analysing the scraped raw data in order to understand its structure, distribution, and potential insights. The
+                    distribution of various features was examined with respect to data categories, such as whether the review was originally in
+                    English.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+                    <figcaption class="figure-caption">The overall stats describing the train and test data sets.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Stat name</th>
+                                <th>Train set</th>
+                                <th>Test set</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Num. of reviews</td>
+                                <td>218,083</td>
+                                <td>11,559</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of reviews written by author (min, max, avg)</td>
+                                <td>(1, 998, 38)</td>
+                                <td>(1, 920, 35)</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of primary locations</td>
+                                <td>56</td>
+                                <td>2</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of secondary locations</td>
+                                <td>170</td>
+                                <td>10</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of restaurants</td>
+                                <td>1,294</td>
+                                <td>73</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of reviews per restaurant (min, max, avg)</td>
+                                <td>(1, 300, 168)</td>
+                                <td>(11, 295, 158)</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of restaurants per primary location (min, max, avg)</td>
+                                <td>(1, 160, 23)</td>
+                                <td>(5, 68, 36)</td>
+                            </tr>
+                            <tr>
+                                <td>Num. of non-English reviews</td>
+                                <td>183,495</td>
+                                <td>10,827</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+
+                </figure>
+
+                <h3>Insight into authors' review writing patterns</h3>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+                    <img src="img/num-reviews-by-rating.png" class="figure-img img-fluid rounded" />
+                    <figcaption class="figure-caption">Distribution of the number of reviews written by the author with respect to the given rating.
+                        The outliers have been removed using the IQR method. It is visible that the average number of written reviews is higher for
+                        ratings from 2 - 4, which aligns with the intuition that there's a significant portion of users who do not make reviews often,
+                        except for the situations where they want to give an extremely positive or negative review.</figcaption>
+                </figure>
+
+                <h3>Analysis of the distributions w.r.t. the location size</h3>
+
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/distributions-by-location-size.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Distributions of the number of reviews written by the author and the average restaurant rating
+                        with respect to the location size. Since the number of scraped restaurants wasn't necessarily consistent with the real
+                        population size, the location size is rather an indicator of depth of the algorithmic search in a specific area. For this
+                        reason, the more restaurants have been scraped for a given primary location, the more likely it is that the algorithm
+                        collected not only the restaurants recommended by Google Maps, but also those that might have been missed otherwise. It is
+                        consistent with the concentration of high average restaurant ratings in areas with a a smaller number of restaurants (the
+                        promoted places span a huge portion of all restaurants scraped for the location).</figcaption>
+                </figure>
+
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/rating-by-location-size.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Scatter plot showing the relationship between restaurant ratings and location size. The points
+                        form a triangular structure, with a significantly higher number of low-rated restaurants in the "bigger" locations.</figcaption>
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/scatter-translated-by-location-size.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Scatter plot showing the relationship between the proportion of non-english reviews in a
+                        location with respect to its size.</figcaption>
+                </figure>
+
+                <h3>Analysis of the distributions w.r.t. the review original language</h3>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/distribution-ratings-by-is-translated.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Distribution of review ratings for translated and non-translated reviews. It is visible that
+                        the proportion of 5-star ratings is higher in English reviews at the expense of the rest of the ratings.</figcaption>
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/distribution-length-by-rating.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">The distributions of review lengths for each rating category for non-English and English
+                        reviews. It is visible that the average review length is higher in non-English reviews for all rating classes. This suggests
+                        that tourists tend to write shorter reviews.</figcaption>
+                </figure>
+
+                <h3>Analysis of the categorical options</h3>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <figcaption class="figure-caption">Top 3 most common categorized options present in the train dataset reviews. The number of
+                        reviews with no categorized options is <strong>96885</strong>.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Categorized option name</th>
+                                <th>Num. of occurrences</th>
+                                <th>Num. of unique values</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Service</td>
+                                <td>103,987</td>
+                                <td>7</td>
+                            </tr>
+                            <tr>
+                                <td>Price per person</td>
+                                <td>101,229</td>
+                                <td>12</td>
+                            </tr>
+                            <tr>
+                                <td>Meal type</td>
+                                <td>80,875</td>
+                                <td>5</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <div class="d-flex justify-content-center gap-2">
+                        <img src="img/cat-option-distribution-good.png" class="figure-img w-50 rounded" />
+                        <img src="img/cat-option-distribution-bad.png" class="figure-img w-50 rounded" />
+                    </div>
+                    <figcaption class="figure-caption">Distributions of value occurrences for two example categorized options. The left picture shows
+                        a "good" distribution with relatively low number of unique values and high total number of occurrences. The right figure
+                        depicts an example of "bad" option, i.e. extremely high number of options and low total number of occurrences.</figcaption>
+                </figure>
+
+
+            </section>
+
+            <section class="d-flex flex-column gap-4">
+
+                <h2>2. Data Processing &amp; Post-processing Analysis</h2>
+
+                <p>Processing the data involved two steps. First, the processor modules were fit the training data and used to produce the numerical
+                    features. Then, basic stats, such as mean and standard deviation, were calculated on the extracted features. Next step involved
+                    using the produced stats as well as the saved processors' states to obtain the test dataset. This two-step process ensures that
+                    there's no data leakage between the training and test sets.</p>
+
+                <p>The following classes of features were extracted from the raw data.</p>
+
+                <ol>
+                    <li>
+                        <strong>BERT-based embeddings</strong>
+                        <ul>
+                            <li>sentence-level embeddings obtained from the <strong>[CLS]</strong> BERT's special token</li>
+                            <li>available in two modes: a sequence of <strong>sentence</strong> embeddings or a single averaged embedding for the <strong>
+                                review</strong></li>
+                        </ul>
+                    </li>
+
+                    <li>
+                        <strong>Word count-based features</strong>
+                        <ul>
+                            <li>based on classical text processing techniques involving counting word occurrences</li>
+                            <li>available as tensors containing features for the <strong>top-k</strong> most common words to control model size</li>
+                            <li>used by the model in several possible modes: <strong>raw count</strong>, <strong>normalized count</strong>, <strong>
+                                TF-IDF</strong> and <strong>Binary Bag-of-Words</strong></li>
+                        </ul>
+                    </li>
+
+                    <li>
+                        <strong>POS-based features</strong>
+                        <ul>
+                            <li>a vector with part-of-speech tag frequencies</li>
+                            <li>available in <strong>raw count</strong> and <strong>normalized count</strong> forms</li>
+                        </ul>
+                    </li>
+
+                    <li>
+                        <strong>Categorical features</strong>
+                        <ul>
+                            <li>extracted based on a chosen subset of categorized options' values</li>
+                            <li>an additional feature: quantized number of reviews written by the author</li>
+                        </ul>
+                    </li>
+
+                    <li>
+                        <strong>Trace features</strong>
+                        <ul>
+                            <li><strong>(velocity, volume)</strong> pairs inspired by <a
+                                    href="https://academic.oup.com/pnasnexus/article/3/5/pgae163/7665783">this paper</a></li>
+                            <li>calculated using spatial relationships between chunks created from token-level BERT embeddings using a given <strong>chunk
+                                size</strong> and <strong>step size</strong></li>
+                            <li><strong>velocity</strong> indicates the pace with which a given review jumps from topic to topic</li>
+                            <li><strong>volume</strong> indicates the semantical richness of the review</li>
+                        </ul>
+
+                        <figure class="m-3 figure d-flex flex-column align-items-center gap-1">
+                            <div class="d-flex justify-content-center flex-column flex-xxl-row align-items-center gap-5 p-5">
+                                <img src="img/trace-volume.png" style="max-height: 300px" class="w-100" />
+                                <img src="img/trace-velocity.png" class="w-100" />
+                            </div>
+                            <figcaption class="figure-caption">Illustration of the velocity and volume features.</figcaption>
+                        </figure>
+
+                    </li>
+                </ol>
+
+                <h3>Processing details</h3>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <figcaption class="figure-caption">Hyperparameters used to obtain the train and test datasets.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Feature name</th>
+                                <th>Feature value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Used BERT model</td>
+                                <td>microsoft/deberta-v2-xxlarge</td>
+                            </tr>
+                            <tr>
+                                <td>Chunk and step sizes for trace features</td>
+                                <td>(3, 1), (5, 2), (5, 5), (7, 3)</td>
+                            </tr>
+                            <tr>
+                                <td>Categorized options used</td>
+                                <td>Meal type, Service, Price per person</td>
+                            </tr>
+                            <tr>
+                                <td>Supported values for "Meal type"</td>
+                                <td>Lunch, Dinner, Other, Brunch, Breakfast</td>
+                            </tr>
+                            <tr>
+                                <td>Supported values for "Service"</td>
+                                <td>Dine in, Take out, Delivery</td>
+                            </tr>
+                            <tr>
+                                <td>Supported values for "Price per person"</td>
+                                <td>zł 1-20, zł 20-40, zł 40-60, zł 60-80, zł 80-100</td>
+                            </tr>
+                            <tr>
+                                <td>Quantization ranges for number of reviews written by the author</td>
+                                <td>0-10, 11-50, 51-100, 101-175, 176+</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </figure>
+
+                <h3>Analysis of the processed dataset</h3>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <div class="d-flex justify-content-center gap-2">
+                        <img src="img/distribution-nreviews-by-is-translated.png" class="figure-img w-50 rounded" />
+                        <img src="img/distribution-service-by-is-translated.png" class="figure-img w-50 rounded" />
+                    </div>
+                    <figcaption class="figure-caption">Distributions of two example categorical features w.r.t. to the original language of the
+                        review. The left figure shows the absolute numerical distribution and the right shows the percentage.</figcaption>
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/scatter-trace-features.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Scatter plot with trace features.</figcaption>
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/word-count-distribution.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Distribution of the document frequency of the words in the dataset.</figcaption>
+                </figure>
+
+
+            </section>
+
+            <section class="d-flex flex-column gap-4">
+
+                <h2>3. Model architecture &amp; metrics</h2>
+
+                <p>The ultimate goal of this work is to develop a neural network capable of predicting the rating of the given review. The model is
+                    designed to use a chosen subset of the data features and encode them using dedicated encoders. Depending on the nature of the
+                    input data, the model uses either <strong>Linguistic Encoders</strong>, that consist of a stack of fully-connected layers with
+                    ReLU activations, normalization and dropout, or <strong>Numerical Encoders</strong>, that leverage Kolmogorov-Arnold networks,
+                    which take longer to train but are more expressive.</p>
+
+                <p>All encoded features are subsequently concatenated and passed through a post-net that produces two kinds of rating prediction
+                    output: <strong>regressive
+                        rating prediction</strong> and <strong>rating classification</strong> either of which can be used to train the model.
+                    Optionally, <strong>classification of the model original language</strong> can be used as a secondary task.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="diagrams/system-overview.drawio.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">The neural architecture of the rating predictor.</figcaption>
+                </figure>
+
+                <p>The following metrics are used during the training (the regression output is always rounded and clamped to produce a single rating
+                    class):</p>
+
+                <ol>
+                    <li>
+                        <strong>Accuracy</strong>
+                    </li>
+                    <li>
+                        <strong>Precision, Recall</strong> - calculated with respect to each class and averaged in either the <strong>macro</strong>
+                        or <strong>weighted</strong> setup.</li>
+                    <li>
+                        <strong>Accuracy, Precision and Recall for translation flag prediction task</strong>
+                    </li>
+                    <li>
+                        <strong>Area Under the ROC Curve for translation flag prediction task</strong>
+                    </li>
+                    <li>
+                        <strong>Metrics for Coarse prediction</strong> - includes precision and recall calculated for the coarse-grained rating
+                        prediction, where ratings 1 and 2 are treated as the "bad" class and 3-5 are treated as the "good" class. </li>
+                </ol>
+
+            </section>
+
+            <section class="d-flex flex-column gap-4">
+
+                <h2>4. Experiments</h2>
+
+                <p>The experiments involved training different setups of the model, where a single experiment's study was treated as standard
+                    hyperparameter tuning, used to obtain the best model for a given set of scientific parameters. Each experiment could involve
+                    comparing the best models of several studies to gain insight into the relationship between a certain parameter and the model's
+                    performance.</p>
+
+                <p>Due to the imperfect nature of the reviews rating task, there's no perfect algorithm to achieve 100% accuracy, as the rating is in
+                    practice often strongly subjective. It is reflected in the level of confusion in the prediction of neighboring classes. For this
+                    reason, I focused on evaluating the model's ability to predict the coarse "bad" and "good" classes. I believe this to be a more
+                    realistic and meaningful evaluation for this type of task.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/exp-conf-matrix.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">Confusion matrix of rating class prediction for an example model's configuration.</figcaption>
+                </figure>
+
+                <h3>Obtaining the baseline model</h3>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/exp-translation-loss-distribution.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">The distribution of the model's precision of calculating the "bad" class. The precision drops
+                        when the translation flag prediction loss increases, because the model focuses on optimizing the secondary loss.</figcaption>
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <img src="img/exp-translation-loss.png" class="figure-img img-fluid rounded" />
+
+                    <figcaption class="figure-caption">The recall of predicting the "bad" class for two different studies. It is clear that including
+                        the secondary task improves the model's performance.</figcaption>
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <div class="d-flex justify-content-center gap-2">
+                        <img src="img/exp-lr-distribution-small.png" class="figure-img w-50 rounded" />
+                        <img src="img/exp-lr-distribution-big.png" class="figure-img w-50 rounded" />
+                    </div>
+                    <figcaption class="figure-caption">Distributions of the loss value with respect to the used learning rate. The figures come from
+                        two different studies and therefore have different scales. However, it is still visible that exploring the space of possible
+                        learning rates makes it possible to find an optimal configuration.</figcaption>
+                </figure>
+
+                <h3>Ablation studies</h3>
+
+                <p>The ablation studies were conducted to evaluate the contribution of each component in the model. For each study, the best model was
+                    chosen from a set of trained configurations. The optimized hyperparameters within each study included regularization and optimizer
+                    parameters.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <figcaption class="figure-caption">Configurations of the ablation studies.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Setup name</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Baseline</td>
+                                <td>The best model obtained in the initial experiments. It uses the secondary task of translation flag prediction. It
+                                    also includes all input categorical features and the best performing trace features. The linguistic
+                                    representations include sentence-level BERT embeddings and top 7000 TFIDF vector.</td>
+                            </tr>
+                            <tr>
+                                <td>No numerical features</td>
+                                <td>The model does not use the numerical encoder for trace and numerical features.</td>
+                            </tr>
+                            <tr>
+                                <td>No classical features</td>
+                                <td>The model does not include either numerical or classical linguistic features, such as POS tags and word
+                                    count-based vectors.</td>
+                            </tr>
+                            <tr>
+                                <td>Only classical features</td>
+                                <td>The model uses only the classical linguistic features, without BERT embeddings or numerical features.</td>
+                            </tr>
+                            <tr>
+                                <td>No BERT sequences</td>
+                                <td>The only feature used by the model is review-level BERT embedding.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </figure>
+
+            </section>
+
+            <section class="d-flex flex-column gap-4">
+
+                <h2>5. Evaluation</h2>
+
+                <p>The evaluation was conducted on the test set which is independent from the training data. This separation aims to reflect testing
+                    the model in production - the models are optimized over the validation dataset and evaluated on independent data.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <figcaption class="figure-caption">Evaluation results for all considered studies.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Setup name</th>
+                                <th>Avg. Precision</th>
+                                <th>Avg. Recall</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Baseline</td>
+                                <td>
+                                    <strong>0.930</strong>
+                                </td>
+                                <td>
+                                    <strong>0.944</strong>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>No numerical features</td>
+                                <td>0.924</td>
+                                <td>0.941</td>
+                            </tr>
+                            <tr>
+                                <td>No classical features</td>
+                                <td>0.921</td>
+                                <td>0.934</td>
+                            </tr>
+                            <tr>
+                                <td>Only classical features</td>
+                                <td>0.915</td>
+                                <td>0.936</td>
+                            </tr>
+                            <tr>
+                                <td>No BERT sequences</td>
+                                <td>0.870</td>
+                                <td>0.913</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </figure>
+
+                <h3>Slice-based evaluation</h3>
+
+                <p>Slice-based evaluation aims to get insight into the model's performance on chosen categories of the data. This type of evaluation
+                    allows to be aware of the possible model's weaknesses, e.g. bad performance on scarcely represented groups.</p>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <figcaption class="figure-caption">Evaluation results for English and Non-English reviews, obtained for the baseline model. It
+                        should be noted that the model's
+                        performance on the positive reviews is high for both categories, whereas there's a difference in the performance for the
+                        negative ones.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Original language</th>
+                                <th>(Precision, Recall) for "Bad" class</th>
+                                <th>(Precision, Recall) for "Good" class</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>English</td>
+                                <td>(0.68, 0.90)</td>
+                                <td>(0.98, 0.94)</td>
+                            </tr>
+
+                            <tr>
+                                <td>Non-English</td>
+                                <td>(0.89, 0.94)</td>
+                                <td>(0.97, 0.94)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </figure>
+
+                <figure class="figure d-flex flex-column align-items-center gap-1">
+
+                    <figcaption class="figure-caption">Evaluation results for different quantization groups of the number of reviews written by
+                        authors, obtained for the baseline model.</figcaption>
+
+                    <table class="table table-striped table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Category</th>
+                                <th>Precision</th>
+                                <th>Recall</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Up to 10</td>
+                                <td>0.949</td>
+                                <td>0.964</td>
+                            </tr>
+
+                            <tr>
+                                <td>10 to 50</td>
+                                <td>0.925</td>
+                                <td>0.937</td>
+                            </tr>
+
+                            <tr>
+                                <td>50 to 100</td>
+                                <td>0.884</td>
+                                <td>0.901</td>
+                            </tr>
+
+                            <tr>
+                                <td>100 to 175</td>
+                                <td>0.895</td>
+                                <td>0.912</td>
+                            </tr>
+
+                            <tr>
+                                <td>175+</td>
+                                <td>0.848</td>
+                                <td>0.865</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </figure>
+
+            </section>
+
+            <footer>
+                <p>&copy; Wiktor Prosowicz 2026</p>
+            </footer>
+
+
+        </div>
+    </body>
+
+</html>
